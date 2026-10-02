@@ -40,3 +40,30 @@ jobs:
         with:
           name: site-build
           path: dist
+
+  deploy:
+    name: deploy
+    runs-on: ubuntu-latest
+    needs: [validate, build]
+    # Pushes to main only. Never runs on pull_request, so PRs from forks
+    # cannot reach the deploy secrets.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Deploy to production
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          # The key is pinned to a forced command on the server, so whatever
+          # is requested here, only /usr/local/bin/zenken-deploy can run.
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes \
+              "root@${DEPLOY_HOST}" deploy
