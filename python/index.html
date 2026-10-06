@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Simulador ADC · Zenken</title>
+<meta name="description" content="Simulador interactivo de conversión analógica-digital: muestreo, cuantificación y codificación. Python ejecutándose en el navegador.">
+<link rel="icon" type="image/svg+xml" href="https://zenken.es/favicon.svg">
+<link rel="icon" type="image/x-icon" href="https://zenken.es/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="https://zenken.es/apple-touch-icon.png">
+<style>
+  :root {
+    --bg: #0b0c10;
+    --bg-soft: #14161c;
+    --text: #f2f3f5;
+    --muted: #9aa0ac;
+    --accent: #5eead4;
+    --border: #23262f;
+    --error: #f87171;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f7f7f8;
+      --bg-soft: #ffffff;
+      --text: #16181d;
+      --muted: #5b606b;
+      --accent: #0f9d8f;
+      --border: #e4e5e9;
+      --error: #c0262d;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px;
+  }
+  header {
+    max-width: 1340px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .mark {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+    color: #05201c;
+    text-decoration: none;
+  }
+  h1 {
+    margin: 0;
+    font-size: 1.4rem;
+    letter-spacing: -0.02em;
+  }
+  header p {
+    margin: 2px 0 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  .card {
+    max-width: 1340px;
+    width: 100%;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+  }
+  .stage {
+    position: relative;
+    width: 100%;
+    background: #ffffff;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    touch-action: none;
+    cursor: default;
+  }
+  .status {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 24px;
+    text-align: center;
+    background: var(--bg-soft);
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .status[hidden] { display: none; }
+  .status.error { color: var(--error); }
+  .spinner {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    animation: spin 0.9s linear infinite;
+  }
+  .status.error .spinner { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .meta {
+    margin-top: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px 20px;
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  .meta a { color: var(--accent); }
+  footer {
+    margin-top: 24px;
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <a class="mark" href="https://zenken.es" aria-label="zenken.es">Z</a>
+    <div>
+      <h1>Simulador ADC</h1>
+      <p>Conversión analógica &rarr; digital: muestreo, cuantificación y codificación. Mueve los deslizadores para cambiar la señal.</p>
+    </div>
+  </header>
+
+  <main class="card">
+    <div class="stage">
+      <canvas id="figure" width="1300" height="1000" aria-label="Figura interactiva del simulador ADC"></canvas>
+      <div class="status" id="status" role="status">
+        <div class="spinner"></div>
+        <span id="status-text">Cargando Python en el navegador&hellip;</span>
+      </div>
+    </div>
+    <div class="meta">
+      <span>El script <a href="simulador_adc.py">simulador_adc.py</a> se ejecuta sin cambios en tu navegador con <a href="https://pyodide.org">Pyodide</a>.</span>
+      <span>La primera carga descarga unos 20&nbsp;MB.</span>
+    </div>
+  </main>
+
+  <footer>&copy; 2026 Zenken &middot; Octubre 2026</footer>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.js"></script>
+<script>
+// Minimal interactive backend: the script draws with Agg, plt.show() paints
+// the pixels onto <canvas>, and pointer events are fed back into matplotlib
+// so its Slider and Button widgets work as they do on the desktop.
+const SHIM = `
+import warnings
+import matplotlib
+matplotlib.use("Agg")
+warnings.filterwarnings("ignore", category=matplotlib.MatplotlibDeprecationWarning)
+import matplotlib.pyplot as plt
+from matplotlib.backend_bases import MouseEvent, LocationEvent
+
+_fig = None
+
+def _show(*args, **kwargs):
+    global _fig
+    _fig = plt.gcf()
+    _paint()
+
+plt.show = _show
+
+def _paint():
+    _fig.canvas.draw()
+    return _fig.canvas.buffer_rgba()
+
+def _size():
+    w, h = _fig.canvas.get_width_height()
+    return [w, h]
+
+def _mouse(kind, x, y, button):
+    # Browser y grows downwards; matplotlib's grows upwards.
+    canvas = _fig.canvas
+    x, y = round(x), canvas.get_width_height()[1] - round(y)
+    if kind == "leave":
+        LocationEvent("figure_leave_event", canvas, x, y)._process()
+    else:
+        MouseEvent(kind, canvas, x, y, button=button)._process()
+`;
+
+const canvas = document.getElementById("figure");
+const ctx = canvas.getContext("2d");
+const statusBox = document.getElementById("status");
+const statusText = document.getElementById("status-text");
+
+function setStatus(text, isError) {
+  statusText.textContent = text;
+  statusBox.classList.toggle("error", Boolean(isError));
+  statusBox.hidden = false;
+}
+
+async function main() {
+  const pyodide = await loadPyodide();
+  setStatus("Cargando numpy y matplotlib…");
+  await pyodide.loadPackage(["numpy", "matplotlib"]);
+
+  setStatus("Ejecutando simulador_adc.py…");
+  const source = await fetch("simulador_adc.py").then((r) => {
+    if (!r.ok) throw new Error("No se pudo descargar simulador_adc.py (" + r.status + ")");
+    return r.text();
+  });
+
+  const shim = pyodide.globals.get("dict")();
+  pyodide.runPython(SHIM, { globals: shim });
+  const scriptGlobals = pyodide.globals.get("dict")();
+  scriptGlobals.set("__name__", "__main__");
+  pyodide.runPython(source, { globals: scriptGlobals, filename: "simulador_adc.py" });
+
+  const paint = shim.get("_paint");
+  const mouse = shim.get("_mouse");
+  const [w, h] = shim.get("_size")().toJs();
+  canvas.width = w;
+  canvas.height = h;
+
+  function blit() {
+    const proxy = paint();
+    const buf = proxy.getBuffer("u8clamped");
+    try {
+      ctx.putImageData(new ImageData(buf.data, w, h), 0, 0);
+    } finally {
+      buf.release();
+      proxy.destroy();
+    }
+  }
+
+  // Widget callbacks call draw_idle(), which on Agg draws immediately, so a
+  // repaint after every event picks up whatever changed.
+  function send(kind, ev) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (ev.clientX - rect.left) * (w / rect.width);
+    const y = (ev.clientY - rect.top) * (h / rect.height);
+    // Like desktop backends, motion events report the held button so that
+    // dragging a slider works. Pass undefined, not null: Pyodide maps
+    // undefined to None.
+    const held = kind !== "motion_notify_event" || (ev.buttons & 1);
+    mouse(kind, x, y, held ? 1 : undefined);
+    blit();
+  }
+
+  // Coalesce pointer moves to one matplotlib event per animation frame.
+  let pendingMove = null;
+  function flushMove() {
+    const ev = pendingMove;
+    pendingMove = null;
+    if (ev) send("motion_notify_event", ev);
+  }
+
+  canvas.addEventListener("pointerdown", (ev) => {
+    if (ev.button !== 0) return;
+    canvas.setPointerCapture(ev.pointerId);
+    flushMove();
+    send("button_press_event", ev);
+    ev.preventDefault();
+  });
+  canvas.addEventListener("pointermove", (ev) => {
+    if (!pendingMove) requestAnimationFrame(flushMove);
+    pendingMove = ev;
+  });
+  canvas.addEventListener("pointerup", (ev) => {
+    if (ev.button !== 0) return;
+    flushMove();
+    send("button_release_event", ev);
+  });
+  canvas.addEventListener("pointerleave", () => {
+    pendingMove = null;
+    mouse("leave", 0, 0, undefined);
+    blit();
+  });
+
+  blit();
+  statusBox.hidden = true;
+}
+
+main().catch((err) => {
+  console.error(err);
+  setStatus("No se pudo iniciar el simulador: " + err.message, true);
+});
+</script>
+</body>
+</html>
