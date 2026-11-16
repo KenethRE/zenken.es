@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="Horario de clases para el móvil">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Horario">
+<title>Horario</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+  :root {
+    --bg: #0b0c10;
+    --bg-soft: #14161c;
+    --bg-softer: #1b1e26;
+    --text: #f2f3f5;
+    --muted: #9aa0ac;
+    --accent: #5eead4;
+    --on-accent: #05201c;
+    --border: #23262f;
+    --error: #fb7185;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f7f7f8;
+      --bg-soft: #ffffff;
+      --bg-softer: #f0f1f4;
+      --text: #16181d;
+      --muted: #5b606b;
+      --accent: #0f9d8f;
+      --on-accent: #ffffff;
+      --border: #e4e5e9;
+      --error: #e11d48;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 20px 16px 28px;
+    -webkit-text-size-adjust: 100%;
+  }
+  main { max-width: 640px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 4px 0 4px; }
+  h1 { margin: 0; font-size: 1.5rem; letter-spacing: -0.02em; }
+  .fecha { color: var(--muted); font-size: 0.9rem; }
+  .quien { color: var(--muted); font-size: 0.85rem; margin: 0 0 16px; }
+
+  .tarjeta { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 16px; padding: 16px; }
+  .ahora { padding: 14px 16px; margin-bottom: 16px; border-left: 5px solid var(--c, var(--accent)); }
+  .ahora .etq { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .ahora .tit { font-size: 1.1rem; font-weight: 600; margin-top: 4px; }
+  .ahora .det { color: var(--muted); font-size: 0.9rem; margin-top: 2px; }
+
+  .semana-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .semana-nav span { font-size: 0.85rem; color: var(--muted); }
+  .flecha { font: inherit; font-size: 1.1rem; color: var(--text); background: var(--bg-soft); border: 1px solid var(--border);
+    border-radius: 10px; width: 40px; height: 34px; cursor: pointer; }
+  .flecha:disabled { opacity: 0.35; cursor: default; }
+
+  .dias { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 14px; }
+  .dias button {
+    font: inherit; color: var(--text); background: var(--bg-soft); border: 1px solid var(--border);
+    border-radius: 12px; padding: 8px 0; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  }
+  .dias button .d { font-weight: 600; font-size: 0.95rem; }
+  .dias button .n { font-size: 0.72rem; color: var(--muted); }
+  .dias button.hoy .n { color: var(--accent); font-weight: 600; }
+  .dias button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .dias button[aria-selected="true"] .n { color: var(--on-accent); }
+
+  .lista { display: flex; flex-direction: column; gap: 10px; }
+  .clase {
+    display: grid; grid-template-columns: 64px 1fr; gap: 12px;
+    background: var(--bg-soft); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px;
+    border-left: 5px solid var(--c);
+  }
+  .clase.actual { box-shadow: 0 0 0 2px var(--accent); }
+  .clase.pasada { opacity: 0.5; }
+  .clase.anulada { opacity: 0.6; border-left-style: dashed; }
+  .clase.anulada .mod, .clase.anulada .nom { text-decoration: line-through; }
+  .chip.estado { background: var(--bg-softer); color: var(--text); border: 1px solid var(--border); }
+  td.c.anulada { text-decoration: line-through; opacity: 0.55; }
+  .clase .h { font-variant-numeric: tabular-nums; font-size: 0.9rem; line-height: 1.35; }
+  .clase .h b { display: block; font-size: 1.05rem; }
+  .clase .h span { color: var(--muted); }
+  .clase .mod { font-weight: 600; font-size: 1rem; }
+  .clase .nom { font-size: 0.9rem; margin-top: 2px; }
+  .clase .info { color: var(--muted); font-size: 0.85rem; margin-top: 3px; line-height: 1.4; }
+  .chip { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+    background: var(--accent); color: var(--on-accent); margin-top: 6px; }
+  .vacio { color: var(--muted); text-align: center; padding: 28px 0; }
+  .aviso { color: var(--muted); font-size: 0.8rem; margin: 12px 2px 0; }
+
+  h2 { font-size: 1rem; margin: 28px 0 10px; }
+  .semana { border: 1px solid var(--border); border-radius: 14px; background: var(--bg-soft); }
+  table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 0.72rem; }
+  th:first-child { width: 42px; }
+  th, td { border-bottom: 1px solid var(--border); padding: 6px 2px; text-align: center; vertical-align: middle; }
+  th { color: var(--muted); font-weight: 600; }
+  th.hoy { color: var(--accent); }
+  td.hora { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.c { font-weight: 600; position: relative; z-index: 0; overflow-wrap: anywhere; }
+  td.c::before { content: ""; position: absolute; top: 2px; right: 2px; bottom: 2px; left: 2px; z-index: -1;
+    border-radius: 6px; background: var(--c); opacity: 0.22; }
+  td.c small { display: block; font-size: 0.62rem; font-weight: 500; color: var(--muted); }
+  tr:last-child td { border-bottom: 0; }
+
+  form label { display: block; font-size: 0.85rem; font-weight: 600; margin: 14px 0 6px; }
+  form input {
+    width: 100%; font: inherit; font-size: 16px; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 10px; padding: 11px 12px;
+  }
+  form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .boton {
+    font: inherit; font-weight: 600; width: 100%; margin-top: 18px; padding: 12px; border: 0; border-radius: 12px;
+    background: var(--accent); color: var(--on-accent); cursor: pointer;
+  }
+  .boton:disabled { opacity: 0.6; cursor: progress; }
+  .boton.sec { background: var(--bg-softer); color: var(--text); border: 1px solid var(--border); }
+  .nota { color: var(--muted); font-size: 0.8rem; line-height: 1.5; margin-top: 14px; }
+  .error { color: var(--error); font-size: 0.9rem; margin-top: 12px; }
+  .acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 24px; }
+  .acciones + .acciones { margin-top: 8px; }
+  .acciones .boton { margin-top: 0; font-size: 0.85rem; padding: 10px; }
+  .enlace { word-break: break-all; font-size: 0.8rem; color: var(--muted); margin-top: 10px; }
+  footer { color: var(--muted); font-size: 0.75rem; margin-top: 24px; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Horario</h1>
+    <div class="fecha" id="fecha"></div>
+  </header>
+  <p class="quien" id="quien"></p>
+
+  <!-- Importar -->
+  <section id="vistaImportar" hidden>
+    <div class="tarjeta">
+      <form id="formulario" autocomplete="on">
+        <div style="font-weight:600">Importa tu horario de la plataforma de Aviation Group</div>
+        <label for="usuario">Usuario de la plataforma</label>
+        <input id="usuario" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+        <label for="contrasena">Contraseña</label>
+        <input id="contrasena" name="password" type="password" autocomplete="current-password" required>
+        <button class="boton" id="btnImportar" type="submit">Importar mi horario</button>
+        <div class="error" id="error" role="alert"></div>
+        <p class="nota">
+          La contraseña se usa una sola vez para leer tu horario en la plataforma y se descarta:
+          no se guarda en ningún sitio. Se guarda solo tu horario, en un enlace privado que
+          puedes borrar cuando quieras. La importación tarda alrededor de un minuto.
+        </p>
+      </form>
+    </div>
+    <button class="boton sec" id="btnCancelar" type="button" hidden>Volver a mi horario</button>
+  </section>
+
+  <!-- Horario -->
+  <section id="vistaHorario" hidden>
+    <section class="tarjeta ahora" id="ahora" aria-live="polite"></section>
+
+    <div class="semana-nav">
+      <button class="flecha" id="prev" type="button" aria-label="Semana anterior">‹</button>
+      <span id="etqSemana"></span>
+      <button class="flecha" id="next" type="button" aria-label="Semana siguiente">›</button>
+    </div>
+    <div class="dias" id="dias" role="tablist" aria-label="Días de la semana"></div>
+    <div class="lista" id="lista"></div>
+    <p class="aviso" id="aviso"></p>
+
+    <h2>Semana completa</h2>
+    <div class="semana"><table id="tabla"></table></div>
+
+    <div class="acciones">
+      <button class="boton sec" id="btnActualizar" type="button">Actualizar horario</button>
+      <button class="boton sec" id="btnCompartir" type="button">Copiar mi enlace</button>
+    </div>
+    <div class="acciones">
+      <button class="boton sec" id="btnOlvidar" type="button">Cerrar en este móvil</button>
+      <button class="boton sec" id="btnBorrar" type="button">Borrar mis datos</button>
+    </div>
+    <div class="enlace" id="enlace"></div>
+  </section>
+
+  <footer id="pie"></footer>
+</main>
+
+<script>
+const API = "/horario/api";
+const NOMBRES = {
+  "0260": "Mecanizado básico",
+  "1425": "Fundamentos de electricidad",
+  "1426": "Fundamentos de electrónica en aeromecánica",
+  "1428": "Técnicas digitales y sistemas de instrumentos electrónicos",
+  "1444": "Instalaciones eléctricas y electrónicas"
+};
+const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+const CORTO = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const min = s => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
+const duracion = m => { const h = Math.floor(m / 60), r = m % 60; return h ? (r ? `${h} h ${r} min` : `${h} h`) : `${r} min`; };
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const lunesDe = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+const masDias = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const leer = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const escribir = (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+
+let H = null;            // horario cargado
+let ID = null;           // identificador del enlace
+let semana = null;       // lunes (Date) de la semana que se ve
+let seleccionado = 1;    // día seleccionado (1-5)
+
+// ---------- Interpretar las celdas de la plataforma ----------
+function colorDe(c) {
+  // Color de la plataforma; si es muy claro se usa el color del texto
+  const rgb = s => (String(s || "").match(/\d+/g) || []).slice(0, 3).map(Number);
+  const f = rgb(c.fondo), t = rgb(c.texto);
+  if (f.length === 3 && (0.299 * f[0] + 0.587 * f[1] + 0.114 * f[2]) / 255 < 0.9) return `rgb(${f.join(",")})`;
+  if (t.length === 3 && t.some(v => v > 40)) return `rgb(${t.join(",")})`;
+  return "var(--accent)";
+}
+
+function interpretar(c) {
+  let lineas = [...c.lineas], estado = "", nota = "";
+  const tr = lineas.findIndex(l => /^↗?\s*Transferid/i.test(l));
+  if (tr >= 0) { estado = "transferido"; nota = lineas[tr].replace(/^↗\s*/, ""); lineas.splice(tr, 1); }
+  const fe = lineas.findIndex(l => /FESTIVO/i.test(l));
+  if (fe >= 0) { estado = "festivo"; nota = "Festivo"; lineas.splice(fe, 1); }
+  const [l1 = "", ...resto] = lineas;
+  const guardia = /guardia/i.test(l1);
+  const m = l1.match(/^(\S+)\s+-\s+(.+)$/);
+  const codigo = !guardia && m ? m[1] : "";
+  const grupo = !guardia && m ? m[2] : "";
+  return {
+    ...c, estado, guardia, codigo, grupo,
+    titulo: guardia ? "🛡️ Guardia" : (codigo || l1),
+    nombre: NOMBRES[codigo] || "",
+    corto: guardia ? "Guardia" : (codigo || l1.slice(0, 8)),
+    sub: estado === "festivo" ? "Festivo" : estado ? "Transf." : guardia ? "" : grupo.split("-")[0],
+    detalle: [grupo, ...resto].filter(Boolean).join(" · "),
+    nota,
+    color: colorDe(c)
+  };
+}
+const imparte = c => !c.estado;
+
+// Une las horas seguidas de la misma clase
+function clasesDelDia(lista, dia) {
+  const out = [];
+  lista.filter(c => c.dia === dia).sort((a, b) => min(a.ini) - min(b.ini)).forEach(c => {
+    const ult = out[out.length - 1];
+    if (ult && ult.fin === c.ini && ult.lineas.join("|") === c.lineas.join("|")) ult.fin = c.fin;
+    else out.push(interpretar({ ...c }));
+  });
+  return out;
+}
+
+// Semana a mostrar: la importada para esas fechas o, si no la hay, la última con clases (semana tipo)
+function datosSemana(lunes) {
+  const k = iso(lunes);
+  if (H.semanas[k]) return { lista: H.semanas[k], tipo: false };
+  const normales = x => H.semanas[x].filter(c => imparte(interpretar(c))).length;
+  const llaves = Object.keys(H.semanas).sort();
+  let base = null;
+  for (const x of llaves) if (!base || normales(x) >= normales(base)) base = x;
+  return { lista: base ? H.semanas[base] : [], tipo: true };
+}
+
+// ---------- Pintar ----------
+function pintarFecha() {
+  const f = new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+  $("fecha").textContent = f.charAt(0).toUpperCase() + f.slice(1);
+}
+
+function pintarAhora() {
+  const now = new Date(), t = now.getHours() * 60 + now.getMinutes();
+  let res = null;
+  for (let i = 0; i < 21 && !res; i++) {
+    const dia = masDias(now, i), dow = dia.getDay();
+    if (dow < 1 || dow > 5) continue;
+    const lista = clasesDelDia(datosSemana(lunesDe(dia)).lista, dow).filter(imparte);
+    if (i === 0) {
+      const act = lista.find(c => min(c.ini) <= t && t < min(c.fin));
+      if (act) { res = { etq: `Ahora · termina a las ${act.fin} (quedan ${duracion(min(act.fin) - t)})`, c: act }; break; }
+      const sig = lista.find(c => min(c.ini) > t);
+      if (sig) res = { etq: `Siguiente · hoy a las ${sig.ini} (en ${duracion(min(sig.ini) - t)})`, c: sig };
+    } else if (lista.length) {
+      const cuando = i === 1 ? "mañana" : `el ${DIAS[dow].toLowerCase()} ${dia.getDate()}`;
+      res = { etq: `Siguiente · ${cuando} a las ${lista[0].ini}`, c: lista[0] };
+    }
+  }
+  const el = $("ahora");
+  if (!res) { el.style.removeProperty("--c"); el.innerHTML = `<div class="tit">Sin clases próximas</div>`; return; }
+  el.style.setProperty("--c", res.c.color);
+  el.innerHTML = `<div class="etq">${esc(res.etq)}</div>
+    <div class="tit">${esc(res.c.titulo)}${res.c.nombre ? " · " + esc(res.c.nombre) : ""}</div>
+    <div class="det">${esc(res.c.ini)}–${esc(res.c.fin)}${res.c.detalle ? " · " + esc(res.c.detalle) : ""}</div>`;
+}
+
+function pintarSemana() {
+  const now = new Date(), d = datosSemana(semana), fin = masDias(semana, 4);
+  $("etqSemana").textContent = `Semana del ${semana.getDate()}/${semana.getMonth() + 1} al ${fin.getDate()}/${fin.getMonth() + 1}`;
+  $("prev").disabled = iso(semana) <= iso(lunesDe(now));
+  $("next").disabled = iso(semana) >= iso(masDias(lunesDe(now), 7 * 8));
+
+  // Pestañas de días
+  const nav = $("dias"); nav.innerHTML = "";
+  for (let i = 1; i <= 5; i++) {
+    const f = masDias(semana, i - 1);
+    const b = document.createElement("button");
+    b.type = "button"; b.setAttribute("role", "tab");
+    b.className = f.toDateString() === now.toDateString() ? "hoy" : "";
+    b.setAttribute("aria-selected", i === seleccionado ? "true" : "false");
+    b.innerHTML = `<span class="d">${CORTO[i]}</span><span class="n">${f.getDate()}/${f.getMonth() + 1}</span>`;
+    b.addEventListener("click", () => { seleccionado = i; pintarSemana(); });
+    nav.appendChild(b);
+  }
+
+  // Lista del día
+  const fechaSel = masDias(semana, seleccionado - 1), esHoy = fechaSel.toDateString() === now.toDateString();
+  const t = now.getHours() * 60 + now.getMinutes();
+  const hoy0 = new Date(now); hoy0.setHours(0, 0, 0, 0);
+  const lista = clasesDelDia(d.lista, seleccionado);
+  $("lista").innerHTML = lista.length ? lista.map(c => {
+    const est = c.estado ? "anulada"
+      : esHoy && min(c.ini) <= t && t < min(c.fin) ? "actual"
+      : (esHoy && min(c.fin) <= t) || fechaSel < hoy0 ? "pasada" : "";
+    return `<div class="clase ${est}" style="--c:${c.color}">
+      <div class="h"><b>${esc(c.ini)}</b><span>${esc(c.fin)}</span></div>
+      <div><div class="mod">${esc(c.titulo)}</div>
+        ${c.nombre ? `<div class="nom">${esc(c.nombre)}</div>` : ""}
+        ${c.detalle ? `<div class="info">${esc(c.detalle)}</div>` : ""}
+        ${est === "actual" ? `<span class="chip">Ahora</span>` : ""}
+        ${c.nota ? `<span class="chip estado">${esc(c.nota)}</span>` : ""}</div></div>`;
+  }).join("") : `<div class="vacio">Sin clases</div>`;
+
+  const actualizado = new Date(H.actualizado).toLocaleDateString("es-ES");
+  $("aviso").textContent = d.tipo
+    ? `Esta semana no está importada: se muestra tu semana tipo (importado el ${actualizado}).`
+    : `Importado de la plataforma el ${actualizado}.`;
+
+  // Tabla semanal
+  const franjas = [...new Set(d.lista.flatMap(c => { const o = []; for (let m = min(c.ini); m < min(c.fin); m += 60) o.push(m); return o; }))].sort((a, b) => a - b);
+  const hh = m => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  let html = `<thead><tr><th></th>${[1, 2, 3, 4, 5].map(i => `<th class="${masDias(semana, i - 1).toDateString() === now.toDateString() ? "hoy" : ""}">${CORTO[i]}</th>`).join("")}</tr></thead><tbody>`;
+  for (const f of franjas) {
+    html += `<tr><td class="hora">${hh(f)}</td>`;
+    for (let i = 1; i <= 5; i++) {
+      const raw = d.lista.find(x => x.dia === i && min(x.ini) <= f && f < min(x.fin));
+      const c = raw && interpretar(raw);
+      html += c ? `<td class="c${c.estado ? " anulada" : ""}" style="--c:${c.color}">${esc(c.corto)}<small>${esc(c.sub)}</small></td>` : `<td></td>`;
+    }
+    html += `</tr>`;
+  }
+  if (!franjas.length) html += `<tr><td colspan="6" class="vacio">Sin clases esta semana</td></tr>`;
+  $("tabla").innerHTML = html + "</tbody>";
+}
+
+const enlacePersonal = () => `${location.origin}${location.pathname}#${ID}`;
+
+function mostrarHorario() {
+  $("vistaImportar").hidden = true; $("vistaHorario").hidden = false;
+  $("quien").textContent = H.nombre || "";
+  const now = new Date(), dow = now.getDay();
+  semana = lunesDe(dow === 6 || dow === 0 ? masDias(now, 2) : now);
+  seleccionado = dow >= 1 && dow <= 5 ? dow : 1;
+  $("enlace").textContent = "Tu enlace privado: " + enlacePersonal();
+  pintarFecha(); pintarAhora(); pintarSemana();
+}
+
+function mostrarImportar(conCancelar) {
+  $("vistaHorario").hidden = true; $("vistaImportar").hidden = false;
+  $("btnCancelar").hidden = !conCancelar;
+  $("quien").textContent = "";
+  pintarFecha();
+  const u = leer("horario-usuario"); if (u) $("usuario").value = u;
+}
+
+function olvidar() {
+  escribir("horario-id", null); if (ID) escribir("horario-datos-" + ID, null);
+  ID = null; H = null; history.replaceState(null, "", location.pathname);
+  mostrarImportar(false);
+}
+
+// ---------- Cargar ----------
+async function cargar(id) {
+  const r = await fetch(`${API}/h/${encodeURIComponent(id)}`, { cache: "no-store" });
+  if (!r.ok) throw new Error(r.status === 404 ? "no-existe" : "red");
+  return r.json();
+}
+
+function guardarLocal() {
+  escribir("horario-id", ID); escribir("horario-datos-" + ID, JSON.stringify(H));
+}
+
+async function iniciar() {
+  pintarFecha();
+  $("pie").textContent = "zenken.es · página no oficial, sin relación con Aviation Group";
+  ID = (location.hash || "").slice(1) || leer("horario-id");
+  if (!ID) return mostrarImportar(false);
+  if (location.hash.slice(1) !== ID) history.replaceState(null, "", `#${ID}`);
+  const cache = leer("horario-datos-" + ID);
+  if (cache) { try { H = JSON.parse(cache); mostrarHorario(); } catch (e) {} }
+  try {
+    H = await cargar(ID); guardarLocal(); mostrarHorario();
+  } catch (e) {
+    if (e.message === "no-existe") olvidar();
+    else if (!H) { mostrarImportar(false); $("error").textContent = "Sin conexión con el servidor."; }
+  }
+}
+
+$("formulario").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const usuario = $("usuario").value.trim(), contrasena = $("contrasena").value;
+  const btn = $("btnImportar"); btn.disabled = true; btn.textContent = "Leyendo tu horario… (≈1 min)";
+  $("error").textContent = "";
+  try {
+    const r = await fetch(`${API}/importar`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario, contrasena })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : "No se ha podido importar.");
+    $("contrasena").value = "";
+    escribir("horario-usuario", usuario);
+    ID = j.id; history.replaceState(null, "", `#${ID}`);
+    H = await cargar(ID); guardarLocal(); mostrarHorario();
+  } catch (e) {
+    $("error").textContent = e.message === "Failed to fetch" ? "Sin conexión con el servidor." : (e.message || "No se ha podido importar.");
+  } finally {
+    btn.disabled = false; btn.textContent = "Importar mi horario";
+  }
+});
+
+$("prev").addEventListener("click", () => { semana = masDias(semana, -7); pintarSemana(); });
+$("next").addEventListener("click", () => { semana = masDias(semana, 7); pintarSemana(); });
+$("btnActualizar").addEventListener("click", () => mostrarImportar(true));
+$("btnCancelar").addEventListener("click", () => mostrarHorario());
+$("btnCompartir").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(enlacePersonal()); $("btnCompartir").textContent = "¡Copiado!"; }
+  catch (e) { $("btnCompartir").textContent = "Cópialo de abajo"; }
+  setTimeout(() => { $("btnCompartir").textContent = "Copiar mi enlace"; }, 2500);
+});
+$("btnOlvidar").addEventListener("click", () => {
+  if (confirm("Este móvil dejará de mostrar tu horario. Tu enlace seguirá funcionando.")) olvidar();
+});
+$("btnBorrar").addEventListener("click", async () => {
+  if (!confirm("Se borrará tu horario del servidor y tu enlace dejará de funcionar. ¿Seguir?")) return;
+  await fetch(`${API}/h/${encodeURIComponent(ID)}`, { method: "DELETE" }).catch(() => {});
+  olvidar();
+});
+
+window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (h && h !== ID) iniciar(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && H) { pintarFecha(); pintarAhora(); pintarSemana(); } });
+setInterval(() => { if (H && !document.hidden) { pintarAhora(); pintarSemana(); } }, 30000);
+iniciar();
+</script>
+</body>
+</html>
