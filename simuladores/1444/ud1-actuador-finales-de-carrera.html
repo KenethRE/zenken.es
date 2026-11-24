@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Mueve el selector del actuador para abrir o cerrar, y mira cómo paran los finales de carrera o salta el disyuntor.">
+<title>Actuador eléctrico con finales de carrera · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .lamparas { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0; padding: 0; list-style: none; font-size: 1.02rem; }
+  .lamparas li { display: inline-flex; align-items: center; gap: 8px; }
+  .lamparas i { display: inline-block; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--ink); background: #DDE3EC; }
+  .lamparas li.on-verde i { background: #2ECC71; box-shadow: 0 0 10px #2ECC71; }
+  .lamparas li.on-oro i { background: var(--gold); box-shadow: 0 0 10px var(--gold); }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Actuador eléctrico con finales de carrera</h1>
+    <p class="sub">UD1 · CE c · CE f · motor de 28 V CC</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div class="tarjeta">
+        <h2>Lámparas del panel</h2>
+        <ul class="lamparas" id="lamparas">
+          <li><i></i>DS1 abierto</li><li><i></i>DS2 en movimiento</li><li><i></i>DS3 cerrado</li>
+        </ul>
+      </div>
+      <div id="actuador"></div>
+      <div id="grafica"></div>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Mandos</h2><div class="controles" id="mandos"></div></div>
+      <div class="panel"><h2>Estado del circuito</h2><div class="salida" id="salida"></div><span id="estado"></span></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>El motor de los flaps. Mueve el interruptor S5 a A (el eje gira en sentido horario y el actuador abre) o a B (antihorario: cierra) y observa cómo el vástago avanza hasta pisar el microinterruptor de final de carrera, que corta el motor: S1 al final de la apertura y S2 al final del cierre (apuntes, apdo. 4.3.2, fig. 16). Las lámparas indican abierto, en movimiento o cerrado.</p>
+      <p>Marca «S1 averiado» o «S2 averiado»: el motor llega al tope, se bloquea, la corriente sube y salta el disyuntor.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Preguntas para el alumnado</h2>
+      <ul>
+        <li>¿Qué elemento para el motor al final del recorrido?</li>
+        <li>¿Por qué, con S1 pisado, el motor sí puede girar al pasar S5 a B?</li>
+        <li>Si salta el disyuntor al final del recorrido, ¿qué comprobarías con el polímetro?</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Datos de referencia</h2>
+      <p class="nota-ref">No están en los apuntes: corriente normal del motor 3 A, corriente con el motor bloqueado 12 A, disyuntor de 7,5 A que salta tras unos 2 s de sobreintensidad, velocidad 12 % del recorrido por segundo. La lógica de las lámparas está simplificada (en el esquema real las encienden S3 y S4).</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  // ── CÁLCULO
+  const I_NORMAL = 3.0, I_BLOQUEO = 12.0, I_DISY = 7.5, T_DISPARO = 2.0, VEL = 12.0;
+  const VENTANA = 20.0; // segundos de historial en la gráfica
+  const S5_OPC = ["A · abrir (horario)", "0 · parado", "B · cerrar (antihorario)"];
+  const nuevoEstado = () => ({ pos: 20.0, t: 0.0, disy: true, sobre: 0.0, arranque: 0.0, girando: 0, i: 0.0,
+    s5: "A", f1: false, f2: false, histT: [], histI: [] });
+  /** Avanza la simulación dt segundos. */
+  function paso(st, dt = 0.1) {
+    st.t += dt;
+    const p = st.pos;
+    const sentido = { A: 1, 0: 0, B: -1 }[st.s5];
+    // ¿Llega tensión al motor? Disyuntor cerrado y el final de carrera de ese sentido sin pisar (o averiado)
+    const alimentado = st.disy && sentido !== 0 && !(sentido === 1 && p >= 99.9 && !st.f1)
+      && !(sentido === -1 && p <= 0.1 && !st.f2);
+    if (alimentado) {
+      if (st.girando !== sentido) st.arranque = 0.3;
+      const tope = (sentido === 1 && p >= 100) || (sentido === -1 && p <= 0);
+      if (tope) { // final de carrera averiado: el motor empuja contra el tope mecánico
+        st.girando = 0;
+        st.i = I_BLOQUEO;
+      } else {
+        st.girando = sentido;
+        st.pos = Math.min(100.0, Math.max(0.0, p + sentido * VEL * dt));
+        st.i = I_NORMAL + (st.arranque > 0 ? 3.0 : 0.0);
+      }
+      st.arranque = Math.max(0.0, st.arranque - dt);
+    } else {
+      st.girando = 0;
+      st.i = 0.0;
+    }
+    st.sobre = st.i > I_DISY ? st.sobre + dt : 0.0;
+    if (st.sobre >= T_DISPARO) { st.disy = false; st.i = 0.0; st.sobre = 0.0; }
+    st.histT.push(st.t);
+    st.histI.push(st.i);
+    while (st.histT.length && st.histT[0] < st.t - VENTANA) { st.histT.shift(); st.histI.shift(); }
+  }
+  /** Texto del panel, aviso y si va en rojo. */
+  function textoEstado(st) {
+    const p = st.pos;
+    const pis1 = p >= 99.9, pis2 = p <= 0.1;
+    const c1 = pis1 && !st.f1 ? "ABIERTO (pisado)" : (st.f1 ? "averiado: no abre" : "cerrado");
+    const c2 = pis2 && !st.f2 ? "ABIERTO (pisado)" : (st.f2 ? "averiado: no abre" : "cerrado");
+    const bloq = st.girando === 0 && st.i > I_DISY;
+    const aviso = !st.disy ? "SALTÓ EL DISYUNTOR: motor sin tensión. Revisa el final de carrera y pulsa «Rearmar disyuntor»"
+      : bloq ? "MOTOR BLOQUEADO EN EL TOPE: la corriente sube" : "Funcionamiento normal";
+    const texto = `S5 en ${st.s5}\n` +
+      `Motor: ${st.girando === 1 ? "gira en sentido horario" : st.girando === -1 ? "gira en sentido antihorario" : "parado"}\n` +
+      `Posición: ${num(p, 0, "%")}\n\n` +
+      `S1 (final de apertura): ${c1}\nS2 (final de cierre): ${c2}\n\n` +
+      `Corriente del motor: ${num(st.i, 1, "A")}\n` +
+      `Disyuntor de 7,5 A: ${st.disy ? "cerrado" : "SALTADO"}`;
+    return { texto, aviso, rojo: !st.disy || bloq };
+  }
+  // ── FIN CÁLCULO
+
+  const st = nuevoEstado();
+  for (let k = 0; k < 30; k++) paso(st, 0.1); // 3 s de funcionamiento previo: el actuador ya está abriendo
+
+  // ── Dibujo del actuador (coordenadas del Python: x 0–100, y de −4 a 40; las lámparas van en HTML encima)
+  const UX = 6.4, UY = 5.4, YMIN = -8, YMAX = 40;
+  const actuador = new Sim.Lienzo("#actuador", {
+    ancho: 640, proporcion: (YMAX - YMIN) * UY / 640, etiqueta: "Actuador con su motor, el vástago y los finales de carrera S1 y S2",
+    dibujar(ctx) {
+      const P = (x, y) => [x * UX, (YMAX - y) * UY];
+      const t = (s, x, y, e) => Sim.texto(ctx, s, ...P(x, y), Object.assign({ tam: 21 }, e));
+      const rect = (x, y, w, h, relleno) => {
+        const [px, py] = P(x, y + h);
+        ctx.fillStyle = relleno; ctx.fillRect(px, py, w * UX, h * UY);
+        ctx.strokeStyle = C.INK; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.strokeRect(px, py, w * UX, h * UY);
+      };
+      const p = st.pos;
+      const tip = 52 + 42 * p / 100;
+      const pis1 = p >= 99.9, pis2 = p <= 0.1;
+      // motor y reductora
+      const [mx, my] = P(4 - 0.6, 27 + 0.6);
+      Sim.caja(ctx, mx, my, 39.2 * UX, 15.2 * UY, { radio: 10, relleno: C.NAVY, color: C.NAVY });
+      t("Motor B1 + reductora", 23, 20, { alin: "center", base: "middle", negrita: true, color: C.WHITE, tam: 22 });
+      // vástago y punta
+      rect(42, 17, tip - 42, 6, "#9AA7BD");
+      ctx.save(); ctx.beginPath(); ctx.ellipse(...P(tip, 20), 2.2 * UX, 3.15 * UY, 0, 0, 2 * Math.PI);
+      ctx.fillStyle = C.GOLD; ctx.fill(); ctx.strokeStyle = C.INK; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
+      // finales de carrera
+      rect(50.5, 25, 4, 5, pis2 ? C.GOLD : C.CARD);
+      rect(92.5, 25, 4, 5, pis1 ? C.GOLD : C.CARD);
+      const dosLineas = 21 * 1.25 / UY; // altura de una línea de texto en unidades del dibujo
+      t("S2\nfinal de cierre", 52.5, 31.5 + dosLineas, { alin: "center" });
+      t("S1\nfinal de apertura", 96.5, 31.5 + dosLineas, { alin: "right" });
+      Sim.polilinea(ctx, [P(52, 11), P(94, 11)], { color: C.MUTED, ancho: 1.5 });
+      t("CERRADO\n(0 %)", 52, 8, { alin: "left", base: "top", color: C.MUTED, tam: 18 });
+      t("ABIERTO\n(100 %)", 94, 8, { alin: "right", base: "top", color: C.MUTED, tam: 18 });
+      t({ 1: "→ abriendo (giro horario)", "-1": "← cerrando (giro antihorario)", 0: "motor parado" }[st.girando], 73, -6.5,
+        { alin: "center", negrita: true, color: C.NAVY, tam: 22 });
+    },
+  });
+
+  const grafica = new Sim.Lienzo("#grafica", {
+    proporcion: 0.4, altoMin: 220, etiqueta: "Corriente del motor en los últimos 20 segundos",
+    dibujar(ctx, w, h, L) {
+      const ej = new Sim.Ejes(L, ctx, {
+        xlim: [-VENTANA, 0], ylim: [0, 14], xticks: [-20, -15, -10, -5, 0],
+        fmtx: (x) => String(x).replace("-", "−"),
+        xlabel: "Tiempo (s, los últimos 20 s)", ylabel: "Corriente (A)",
+      });
+      ej.marco();
+      ej.hline(I_DISY, { color: C.RED, guion: true });
+      ej.texto(-VENTANA + 0.3, I_DISY + 0.4, "Disyuntor de 7,5 A", { tam: 14, color: C.RED });
+      ej.linea(st.histT.map((x) => x - st.t), st.histI, { color: C.NAVY, ancho: 2.5 });
+    },
+  });
+
+  const salida = document.getElementById("salida");
+  const lamparas = document.querySelectorAll("#lamparas li");
+  function redibujar() {
+    const on = [st.pos >= 99.9, st.girando !== 0, st.pos <= 0.1];
+    lamparas.forEach((li, k) => { li.className = on[k] ? (k === 1 ? "on-oro" : "on-verde") : ""; });
+    const e = textoEstado(st);
+    salida.textContent = e.texto;
+    salida.style.color = e.rojo ? C.RED : C.NAVY;
+    Sim.estado("#estado", e.aviso, e.rojo ? "mal" : "ok");
+    actuador.pedir(); grafica.pedir();
+  }
+
+  // Reloj de 0,1 s como el temporizador del Python
+  let acum = 0;
+  const reloj = Sim.animar((dt) => {
+    acum += dt;
+    let n = 0;
+    while (acum >= 0.1 - 1e-9) { paso(st, 0.1); acum -= 0.1; n++; }
+    if (n) redibujar();
+  });
+
+  Sim.opciones("#mandos", { titulo: "Interruptor S5", etiquetas: S5_OPC, activa: 0, alCambiar: (i, lab) => { st.s5 = lab[0]; redibujar(); } });
+  Sim.casillas("#mandos", { titulo: "Averías", etiquetas: ["S1 averiado (no abre)", "S2 averiado (no abre)"], alCambiar: (i, v) => { if (i === 0) st.f1 = v; else st.f2 = v; redibujar(); } });
+  Sim.boton("#mandos", "Rearmar disyuntor", () => { st.disy = true; st.sobre = 0.0; redibujar(); }, { primario: true });
+  const bPausa = Sim.boton("#mandos", "Pausa", () => {
+    if (reloj.activo) { reloj.parar(); bPausa.textContent = "Continuar"; }
+    else { acum = 0; reloj.arrancar(); bPausa.textContent = "Pausa"; }
+  });
+  window.__prueba = { st, paso, redibujar }; /*PRUEBA2*/
+  redibujar();
+  reloj.arrancar();
+})();
+</script>
+<script>/*PRUEBA*/(()=>{const h=new URLSearchParams(location.hash.slice(1));for(const a of (h.get('a')||'').split(';').filter(Boolean)){const [sel,val]=a.split('=');const el=document.querySelectorAll('input,button')[+sel];if(val!==undefined&&el.type==='range'){el.value=val;el.dispatchEvent(new Event('input'));}else el.click();}const n=+h.get('n')||0;if(window.__prueba){for(let k=0;k<n;k++)window.__prueba.paso(window.__prueba.st,0.1);window.__prueba.redibujar();}})();</script>
+</body>
+</html>

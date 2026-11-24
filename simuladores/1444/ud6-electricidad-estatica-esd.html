@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Cambia la humedad, la actividad y las protecciones, y mira la tensión que acumula el técnico y si daña el componente.">
+<title>Electricidad estática y ESD · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .salida { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Electricidad estática y ESD</h1>
+    <p class="sub">UD6 · CE b · c · e · normas ESD de los apuntes</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div id="grafica"></div>
+      <div class="panel"><h2>Al tocar la tarjeta</h2><div class="salida" id="salida"></div></div>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Mandos</h2><div class="controles" id="mandos"></div></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Un técnico camina hasta el puesto de aviónica (de 0 a 8 s), se sienta y a los 10 s toca una tarjeta sensible a las descargas electrostáticas (ESD). La gráfica muestra la tensión que acumula su cuerpo.</p>
+      <p>Se cambian la humedad del aire, la actividad que genera la carga y las protecciones: zapatos conductores con suelo disipativo y pulsera antiestática conectada a masa al llegar al puesto. El panel compara la tensión de la descarga con la sensibilidad del componente.</p>
+      <p>Relación con los apuntes (UD6): la electricidad estática se produce por fricción (apartado 3.4); se controla igualando cargas y derivándolas a masa; los zapatos conductores derivan a masa la estática de las personas (apartado 4); las normas ESD (apartados 6.3 a 6.8: MIL-HDBK-263, ANSI/EIA-625, ESD S1.1 pulseras, ESD S20.20…) protegen los componentes.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Preguntas para el alumnado</h2>
+      <ul>
+        <li>¿Por qué hay más descargas en invierno, con calefacción y el aire seco?</li>
+        <li>¿Qué pasa al conectarte la pulsera?</li>
+        <li>¿Te enterarías de haber dañado la tarjeta con una descarga de 800 V?</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Datos de referencia (NO están en los apuntes)</h2>
+      <ul>
+        <li>Tensiones típicas del cuerpo según la actividad y la humedad relativa (tabla clásica de la bibliografía ESD, p. ej. MIL-HDBK-263): caminar sobre moqueta 35 000 V (10–20 % HR) y 1 500 V (65–90 % HR); sobre suelo de vinilo 12 000 V y 250 V; trabajar en el banco 6 000 V y 100 V; levantarse de una silla de espuma 18 000 V y 1 500 V. Entre esos dos puntos se interpola en escala logarítmica.</li>
+        <li>Capacidad del cuerpo: unos 150 pF (el modelo del cuerpo humano, HBM, usa 100 pF y 1 500 Ω). Carga Q = C·V; energía E = ½·C·V².</li>
+        <li>Pulsera con resistencia de 1 MΩ: constante de tiempo R·C = 0,15 ms, descarga casi instantánea y sin chispa.</li>
+        <li>Una descarga se nota a partir de unos 3 000 V. Sensibilidad de los componentes (clases HBM): clase 0B &lt; 250 V, clase 1A &lt; 500 V, clase 1C &lt; 2 000 V. Por debajo de 3 000 V se puede dañar un componente SIN NOTAR nada.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  /* CÁLCULO */
+  const C_CUERPO = 150e-12;
+  const ACTIVIDAD = [["Caminar sobre moqueta", 35000, 1500], ["Caminar sobre vinilo", 12000, 250],
+    ["Levantarse de una silla", 18000, 1500], ["Trabajar en el banco", 6000, 100]];
+  const COMPONENTE = [["Muy sensible (clase 0B): 250 V", 250], ["Sensible (clase 1A): 500 V", 500], ["Poco sensible (clase 1C): 2 000 V", 2000]];
+  const HR_SECO = 15.0, HR_HUMEDO = 77.5;
+  const T_LLEGA = 8.0, T_TOCA = 10.0, T_FIN = 12.0;
+  const PERCEPCION = 3000;
+  const N = 1201;
+  const T = Array.from({ length: N }, (_, i) => i * (T_FIN / (N - 1)));   // como np.linspace(0, 12, 1201)
+  const buscar = (x) => { let i = 0; while (i < N && T[i] < x) i++; return i; };   // np.searchsorted (lado izquierdo)
+
+  // Tensión máxima que alcanza el cuerpo con calzado normal (interpolación logarítmica entre las dos humedades)
+  function vMax(iAct, hr) {
+    const [, seco, humedo] = ACTIVIDAD[iAct];
+    const f = Math.min(1, Math.max(0, (hr - HR_SECO) / (HR_HUMEDO - HR_SECO)));
+    return 10 ** (Math.log10(seco) + f * (Math.log10(humedo) - Math.log10(seco)));
+  }
+
+  // Tensión del cuerpo en el tiempo (V)
+  function curva(iAct, hr, zapatos, pulsera) {
+    const vm = vMax(iAct, hr);
+    const tauGen = 2.5;                                       // s: carga que crece al andar con calzado normal
+    const v = T.map((t) => vm * (1 - Math.exp(-Math.min(t, T_LLEGA) / tauGen)) * (zapatos ? 0.004 : 1));
+    const vLlega = v[buscar(T_LLEGA)];
+    for (let i = 0; i < N; i++) {
+      if (T[i] > T_LLEGA) v[i] = pulsera ? 0.0 : vLlega * Math.exp(-(T[i] - T_LLEGA) / 60.0);   // τ = 1 MΩ · 150 pF = 0,15 ms
+    }
+    return v;
+  }
+
+  function resultado(iAct, hr, zapatos, pulsera, umbral) {
+    const v = curva(iAct, hr, zapatos, pulsera);
+    const vt = v[buscar(T_TOCA)];
+    const q = C_CUERPO * vt, e = 0.5 * C_CUERPO * vt ** 2;
+    const dana = vt >= umbral, nota = vt >= PERCEPCION;
+    const texto = `Tensión del cuerpo: ${num(vt, 0, "V")}\n`
+      + `Carga Q = C·V = ${carga(q)}\n`
+      + `Energía E = ½·C·V² = ${energia(e)}\n`
+      + `¿Lo notas? ${nota ? "Sí, chispazo" : "No"}\n`
+      + `Componente: ${dana ? "DAÑADO" : "a salvo"}${dana && !nota ? " (sin que lo notes)" : ""}`;
+    return { v, vt, q, e, dana, nota, texto, color: dana ? C.RED : C.GREEN };
+  }
+
+  const carga = (q) => (q >= 1e-6 ? num(q * 1e6, 2, "µC") : num(q * 1e9, 1, "nC"));
+  const energia = (e) => (e >= 1e-3 ? num(e * 1e3, 1, "mJ") : num(e * 1e6, 2, "µJ"));
+  /* FIN CÁLCULO */
+
+  // Escala «symlog» de matplotlib (linthresh = 10, linscale = 1, base 10)
+  const LT = 10, LS = 1 / (1 - 1 / 10);
+  const sl = (y) => (Math.abs(y) <= LT ? y * LS : Math.sign(y) * LT * (LS + Math.log10(Math.abs(y) / LT)));
+
+  const st = { hr: 30, act: 1, comp: 0, zap: false, pul: false };
+  let r = null;
+
+  const grafica = new Sim.Lienzo("#grafica", {
+    proporcion: 0.62, altoMin: 320, altoMax: 560, etiqueta: "Tensión del cuerpo del técnico en el tiempo",
+    dibujar(ctx, w, h, L) {
+      if (!r) return;
+      const ticks = [0, 10, 100, 1000, 10000];
+      const ej = new Sim.Ejes(L, ctx, {
+        xlim: [0, T_FIN], ylim: [0, sl(60000)], yticks: ticks.map(sl), fmty: (y) => num(ticks[ticks.map(sl).indexOf(y)], 0),
+        xlabel: "Tiempo (s)", ylabel: "Tensión del cuerpo (V)", margen: { izq: 74 },
+      });
+      const umbral = COMPONENTE[st.comp][1];
+      const Y = (v) => sl(v);
+      ej.marco();
+      ej.area([0, T_LLEGA], [sl(60000), sl(60000)], 0, { color: "#EAF0F8", alfa: 0.8 });
+      ej.texto(T_LLEGA / 2, Y(30000), "Camina hasta el puesto", { tam: 14, color: C.NAVY, alin: "center" });
+      ej.vline(T_TOCA, { color: C.NAVY, ancho: 1.5, guion: true });
+      ej.texto(T_TOCA + 0.1, Y(2), "Toca la\ntarjeta", { tam: 14, color: C.NAVY, base: "bottom" });
+      ej.hline(Y(PERCEPCION), { color: C.INK, ancho: 1.2, guion: "punto" });
+      ej.texto(11.85, Y(PERCEPCION * 0.55), "Se nota la descarga (≈ 3 000 V)", { tam: 13, color: C.INK, alin: "right", base: "top", fondo: "rgba(255,255,255,0.85)", pad: 2 });
+      ej.hline(Y(umbral), { color: C.RED, ancho: 2, guion: true });
+      ej.texto(11.85, Y(umbral * 0.8), `Daña el componente (≥ ${num(umbral, 0, "V")})`, { tam: 13, color: C.RED, negrita: true, alin: "right", base: "top", fondo: "rgba(255,255,255,0.85)", pad: 2 });
+      ej.linea(T, r.v.map(Y), { color: C.GOLD, ancho: 4 });
+      ej.punto(T_TOCA, Y(r.vt), { radio: 10, color: C.GOLD, borde: C.NAVY });
+    },
+  });
+
+  const salida = document.getElementById("salida");
+  function actualizar() {
+    r = resultado(st.act, st.hr, st.zap, st.pul, COMPONENTE[st.comp][1]);
+    salida.textContent = r.texto;
+    salida.style.color = r.color;
+    grafica.pedir();
+  }
+
+  Sim.deslizador("#mandos", { etiqueta: "Humedad relativa", min: 10, max: 90, valor: 30, paso: 1, unidad: "%", dec: 0, alCambiar: (v) => { st.hr = v; actualizar(); } });
+  Sim.opciones("#mandos", { titulo: "Actividad", etiquetas: ACTIVIDAD.map((a) => a[0]), activa: 1, alCambiar: (i) => { st.act = i; actualizar(); } });
+  Sim.opciones("#mandos", { titulo: "Componente de la tarjeta", etiquetas: COMPONENTE.map((c) => c[0]), activa: 0, alCambiar: (i) => { st.comp = i; actualizar(); } });
+  Sim.casillas("#mandos", { titulo: "Protecciones", etiquetas: ["Zapatos conductores y suelo disipativo", "Pulsera conectada al llegar al puesto"], marcadas: [false, false],
+    alCambiar: (i, v) => { if (i === 0) st.zap = v; else st.pul = v; actualizar(); } });
+  actualizar();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Maneja los interruptores, el BAT BUS TIE y el generador del circuito de baterías del CN-235, y mira tensiones y corrientes.">
+<title>Circuito de baterías del CN-235 · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  #esquema { max-width: 760px; width: 100%; justify-self: center; }
+  .leyenda-barras { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding: 0; list-style: none; font-size: .95rem; }
+  .leyenda-barras li { display: inline-flex; align-items: center; gap: 6px; }
+  .leyenda-barras i { display: inline-block; width: 22px; height: 14px; border: 1px solid var(--ink); border-radius: 2px; }
+  .mensajes { margin: 0; padding-left: 1.1em; font-size: 1.02rem; line-height: 1.45; }
+  .mensajes li + li { margin-top: 4px; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Circuito de baterías del CN-235</h1>
+    <p class="sub">UD2 · CE e · f · h · apartado 6.8 de los apuntes</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div id="esquema"></div>
+      <ul class="leyenda-barras">
+        <li><i style="background:#2E8B57"></i>alimentada por generador</li>
+        <li><i style="background:#E08A00"></i>alimentada por batería</li>
+        <li><i style="background:#B8C2D3"></i>sin tensión</li>
+      </ul>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Panel de generación de CC</h2><div class="controles" id="mandos"></div></div>
+      <div class="panel"><h2>Qué está pasando</h2><ul class="mensajes" id="salida"></ul></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Esquema simplificado de la figura 39 de los apuntes (apartado 6.8). Acciona los interruptores como en el panel de generación de CC: MSTR ELEC BAT, BAT 1 y BAT 2 (mandan los relés BB1 y BB2), arranca o para los generadores y elige la posición de BAT BUS TIE (OFF, AUTO, ON) y el pulsador GEN BUS TIE.</p>
+      <p>Las barras se colorean según quién las alimenta, los indicadores magnéticos muestran si cada relé está cerrado y los aparatos indican tensión de barra y corriente de carga (+) o descarga (−) de cada batería.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Pregunta para el alumnado</h2>
+      <ul>
+        <li>¿Por qué no se cierra BB1 si MSTR ELEC BAT está en OFF?</li>
+        <li>¿Qué marca el amperímetro con y sin generadores?</li>
+        <li>Si falla un generador con BAT BUS TIE en AUTO, ¿quién alimenta su barra?</li>
+        <li>¿Por qué no actúa GEN BUS TIE?</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Modelo simplificado</h2>
+      <p class="nota-ref">Valores orientativos, no del fabricante: GB1 y GB2 siempre cerrados, generador ideal a la tensión elegida, baterías con resistencia interna de 0,1 Ω.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  // ── CÁLCULO
+  const RINT = 0.1;
+  /** bat, gen: [bool, bool]. modo: 'OFF' | 'AUTO' | 'ON'. Devuelve el estado del circuito. */
+  function resolver(mstr, bat, gen, gbt, modo, vg, eb, carga) {
+    const bb = [mstr && bat[0], mstr && bat[1]];
+    const bt = modo === "ON" || (modo === "AUTO" && gen[0] !== gen[1]);
+    const gg = gbt && modo === "OFF";
+    const unidas = bt || gg;
+    const grupos = unidas ? [[0, 1]] : [[0], [1]];
+    const v = [0.0, 0.0], fuente = ["—", "—"], ib = [0.0, 0.0];
+    for (const g of grupos) {
+      const gens = g.filter((k) => gen[k]);
+      const bats = g.filter((k) => bb[k]);
+      const ic = carga * g.length;
+      let vv, src;
+      if (gens.length) {
+        vv = vg; src = "GEN " + gens.map((k) => k + 1).join(" y ");
+        for (const k of bats) ib[k] = (vg - eb) / RINT;
+      } else if (bats.length) {
+        const n = bats.length;
+        vv = Math.max(0.0, eb - ic / n * RINT); src = "BAT " + bats.map((k) => k + 1).join(" y ");
+        for (const k of bats) ib[k] = -ic / n;
+      } else { vv = 0.0; src = "sin tensión"; }
+      for (const k of g) { v[k] = vv; fuente[k] = src; }
+    }
+    return { bb, bt, gg, unidas, v, fuente, ib };
+  }
+  /** Mensajes del panel «Qué está pasando» (como mucho 5) y si hay que avisar en rojo. */
+  function mensajes(s, d) {
+    const msg = [];
+    let mal = false;
+    if ((s.bat[0] || s.bat[1]) && !s.mstr) { msg.push("MSTR ELEC BAT en OFF: BAT 1 y BAT 2 no pueden cerrar BB1 ni BB2."); mal = true; }
+    if (s.gbt && s.modo !== "OFF") { msg.push("GEN BUS TIE no actúa: BAT BUS TIE tiene que estar en OFF."); mal = true; }
+    if (s.modo === "AUTO" && s.gen[0] !== s.gen[1]) {
+      const bueno = s.gen[0] ? 1 : 2;
+      msg.push(`AUTO: falla el GEN ${3 - bueno} → se cierran los relés de unión y el GEN ${bueno} alimenta todas las barras.`);
+    }
+    if (d.gg) msg.push("GEN BUS TIE en ON: barras de los generadores unidas.");
+    for (let k = 0; k < 2; k++) {
+      if (!d.bb[k]) continue;
+      const ib = d.ib[k];
+      if (d.fuente[k].startsWith("GEN") && ib < 0) {
+        msg.push(`BAT ${k + 1} se DESCARGA con el GEN en marcha: la tensión del GEN no supera la de la batería (¿regulador?).`);
+        mal = true;
+      } else if (ib > 0) msg.push(`BAT ${k + 1} en carga: ${num(ib, 0, "A")}.`);
+      else if (ib < 0) msg.push(`BAT ${k + 1} alimenta su barra: ${num(-ib, 0, "A")} de descarga.`);
+    }
+    for (let k = 0; k < 2; k++) if (d.v[k] === 0) { msg.push(`Barras del lado ${k + 1} sin tensión.`); mal = true; }
+    if (!msg.length) msg.push("Todo normal.");
+    return { msg: msg.slice(0, 5), mal };
+  }
+  // ── FIN CÁLCULO
+
+  const GRIS = "#B8C2D3", AMBAR = "#E08A00", OSCURO = "#7F8C9D";
+  const NOMBRES = ["MSTR ELEC BAT", "BAT 1", "BAT 2", "GEN 1 en marcha", "GEN 2 en marcha", "GEN BUS TIE pulsado"];
+  const MODOS = ["OFF", "AUTO", "ON"];
+  const ctl = { sw: [true, true, true, true, false, false], modo: "AUTO", vg: 28.5, eb: 26, carga: 20 };
+  const estadoMandos = () => ({ mstr: ctl.sw[0], bat: [ctl.sw[1], ctl.sw[2]], gen: [ctl.sw[3], ctl.sw[4]], gbt: ctl.sw[5], modo: ctl.modo });
+  const calc = () => { const s = estadoMandos(); return [s, resolver(s.mstr, s.bat, s.gen, s.gbt, s.modo, ctl.vg, ctl.eb, ctl.carga)]; };
+  const colorBarra = (src) => (src.startsWith("GEN") ? C.GREEN : src.startsWith("BAT") ? AMBAR : GRIS);
+
+  // Coordenadas del Python (x 0–10, y 0,7–10,2) con 60 px por unidad en x y 54 en y
+  const UX = 60, UY = 54, Y0 = 0.7, Y1 = 10.2;
+  const esquema = new Sim.Lienzo("#esquema", {
+    ancho: 600, proporcion: (Y1 - Y0) * UY / 600, etiqueta: "Esquema del circuito de baterías y barras del CN-235",
+    dibujar(ctx) {
+      const [s, d] = calc();
+      const P = (x, y) => [x * UX, (Y1 - y) * UY];
+      const linea = (x1, y1, x2, y2, col = C.INK, ancho = 2.5) => Sim.polilinea(ctx, [P(x1, y1), P(x2, y2)], { color: col, ancho });
+      const t = (str, x, y, e = {}) => {
+        // texto centrado en vertical aunque tenga varias líneas
+        const n = String(str).split("\n").length, tam = e.tam || 18;
+        Sim.texto(ctx, str, P(x, y)[0], P(x, y)[1] - (n - 1) * tam * 1.25 / 2, Object.assign({ base: "middle", tam }, e));
+      };
+      const contacto = (x1, y1, x2, y2, cerrado, col = C.INK) => {
+        if (cerrado) linea(x1, y1, x2, y2, col, 3.5);
+        else {
+          const dx = x2 - x1, dy = y2 - y1;
+          linea(x1, y1, x1 + dx * 0.85 - dy * 0.45, y1 + dy * 0.85 + dx * 0.45, col, 3.5);
+        }
+        for (const [x, y] of [[x1, y1], [x2, y2]]) Sim.circulo(ctx, ...P(x, y), 5, { relleno: col, color: null });
+      };
+      const indicador = (x, y, alineado, vertical = true) => {
+        const [px, py] = P(x - 0.28, y + 0.2);
+        Sim.caja(ctx, px, py, 0.56 * UX, 0.4 * UY, { radio: 3, relleno: "#000000", color: C.INK, ancho: 1.5 });
+        const vert = alineado ? vertical : !vertical;
+        const col = alineado ? C.WHITE : OSCURO;
+        if (vert) linea(x, y - 0.15, x, y + 0.15, col, 5);
+        else linea(x - 0.2, y, x + 0.2, y, col, 5);
+      };
+      const aparato = (x, y, letra, lectura, col, izq) => {
+        Sim.circulo(ctx, ...P(x, y), 21, { relleno: C.WHITE, color: C.INK, ancho: 2.5 });
+        t(letra, x, y, { tam: 20, negrita: true, alin: "center" });
+        if (lectura) t(lectura, x + (izq ? -0.5 : 0.5), y, { tam: 19, negrita: true, color: col, alin: izq ? "right" : "left" });
+      };
+      const barra = (x0, x1, y, nombre, col) => {
+        const [px, py] = P(x0, y + 0.2);
+        ctx.fillStyle = col; ctx.fillRect(px, py, (x1 - x0) * UX, 0.4 * UY);
+        ctx.strokeStyle = C.INK; ctx.lineWidth = 1.5; ctx.setLineDash([]); ctx.strokeRect(px, py, (x1 - x0) * UX, 0.4 * UY);
+        t(nombre, (x0 + x1) / 2, y, { tam: 18, negrita: true, alin: "center", color: col !== GRIS ? C.WHITE : C.INK });
+      };
+
+      [1.8, 8.2].forEach((xc, k) => {
+        const izq = k === 0, sg = izq ? 1 : -1, al = izq ? "left" : "right";
+        const cb = colorBarra(d.fuente[k]);
+        // batería
+        linea(xc, 9.55, xc, 9.9);
+        linea(xc - 0.45, 9.55, xc + 0.45, 9.55, C.INK, 4);
+        linea(xc - 0.25, 9.35, xc + 0.25, 9.35, C.INK, 7);
+        t(`BAT ${k + 1}`, xc + sg * 0.6, 9.5, { tam: 20, negrita: true, alin: al });
+        linea(xc, 9.35, xc, 8.9);
+        contacto(xc, 8.9, xc, 8.1, d.bb[k], d.bb[k] ? AMBAR : C.INK);
+        t(`BB${k + 1}`, xc + sg * 0.45, 8.5, { tam: 18, alin: al, color: C.NAVY });
+        indicador(xc - sg * 1.0, 8.5, d.bb[k]);
+        linea(xc, 8.1, xc, 7.6);
+        const ib = d.ib[k];
+        const lect = !d.bb[k] || Math.abs(ib) < 0.5 ? "0 A" : ((ib > 0 ? "+" : "−") + num(Math.abs(ib), 0, "A") + (ib > 0 ? "\ncarga" : "\ndescarga"));
+        linea(xc, 6.9, xc, 6.4);
+        aparato(xc, 7.25, "A", lect, ib > 0 ? C.GREEN : (ib < 0 ? C.RED : C.MUTED), !izq);
+        const [x0, x1] = izq ? [0.4, 3.4] : [6.6, 9.6];
+        // voltímetro de barra
+        const vx = izq ? 0.75 : 9.25;
+        linea(vx, 6.0, vx, 5.55);
+        aparato(vx, 5.2, "V", "", C.NAVY, false);
+        t(num(d.v[k], 1, "V"), vx, 4.6, { tam: 19, negrita: true, color: C.NAVY, alin: "center" });
+        linea(xc, 6.0, xc, 4.1, cb !== GRIS ? cb : C.INK, 3.5);
+        t(`GB${k + 1}`, xc + sg * 0.15, 5.15, { tam: 16, color: C.MUTED, alin: al });
+        barra(x0, x1, 6.2, `BAT BUS ${k + 1}`, cb);
+        barra(x0, x1, 3.9, `GEN BUS ${k + 1}`, cb);
+        // generador y su contactor de línea
+        linea(xc, 3.7, xc, 3.35);
+        contacto(xc, 3.35, xc, 2.7, s.gen[k]);
+        t(`LC${k + 1}`, xc + sg * 0.45, 3.0, { tam: 16, alin: al, color: C.NAVY });
+        linea(xc, 2.7, xc, 2.3);
+        Sim.circulo(ctx, ...P(xc, 1.8), 0.5 * UX, { relleno: s.gen[k] ? C.GREEN : GRIS, color: C.INK, ancho: 2.5 });
+        t(`GEN\n${k + 1}`, xc, 1.8, { tam: 17, negrita: true, alin: "center", color: s.gen[k] ? C.WHITE : C.INK });
+        if (!s.gen[k]) t("PARADO", xc, 0.95, { tam: 17, negrita: true, alin: "center", color: C.RED });
+      });
+      // unión de barras
+      const ct = d.unidas ? colorBarra(d.fuente[0]) : C.INK;
+      linea(4.3, 6.2, 5.7, 6.2, ct); linea(4.3, 3.9, 5.7, 3.9, ct); linea(5.0, 3.9, 5.0, 6.2, ct);
+      contacto(3.4, 6.2, 4.3, 6.2, d.bt, ct); contacto(6.6, 6.2, 5.7, 6.2, d.bt, ct);
+      contacto(3.4, 3.9, 4.3, 3.9, d.gg, ct); contacto(6.6, 3.9, 5.7, 3.9, d.gg, ct);
+      t("BT1 · BT2", 5.0, 6.72, { tam: 16, alin: "center", color: C.NAVY });
+      t("GG1 · GG2", 5.0, 3.4, { tam: 16, alin: "center", color: C.NAVY });
+      indicador(5.0, 7.2, d.bt, false);
+      t("Unión barras BAT", 5.0, 7.72, { tam: 16, alin: "center", color: C.MUTED });
+      const [bx, by] = P(4.45, 3.0);
+      Sim.caja(ctx, bx, by, 1.1 * UX, 0.75 * UY, { radio: 4, relleno: "#000000", color: C.INK });
+      if (d.gg) {
+        linea(4.6, 2.8, 5.4, 2.8, C.WHITE, 5);
+        t("ON", 5.0, 2.45, { tam: 18, negrita: true, alin: "center", color: C.GREEN });
+      }
+      t("GEN BUS TIE", 5.0, 1.95, { tam: 16, alin: "center", color: C.MUTED });
+    },
+  });
+
+  const salida = document.getElementById("salida");
+  function actualizar() {
+    const [s, d] = calc();
+    const { msg, mal } = mensajes(s, d);
+    salida.replaceChildren(...msg.map((m) => Sim.el("li", { text: m })));
+    salida.style.color = mal ? C.RED : C.NAVY;
+    esquema.pedir();
+  }
+
+  Sim.casillas("#mandos", { titulo: "Interruptores", etiquetas: NOMBRES, marcadas: ctl.sw, alCambiar: (i, v) => { ctl.sw[i] = v; actualizar(); } });
+  Sim.opciones("#mandos", { titulo: "BAT BUS TIE", etiquetas: MODOS, activa: 1, alCambiar: (i) => { ctl.modo = MODOS[i]; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "Tensión del GEN", min: 24, max: 29, valor: ctl.vg, paso: 0.1, unidad: "V", dec: 1, alCambiar: (v) => { ctl.vg = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "fem de las baterías", min: 22, max: 27, valor: ctl.eb, paso: 0.1, unidad: "V", dec: 1, alCambiar: (v) => { ctl.eb = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "Consumo por lado", min: 0, max: 50, valor: ctl.carga, paso: 1, unidad: "A", dec: 0, alCambiar: (v) => { ctl.carga = v; actualizar(); } });
+  actualizar();
+})();
+</script>
+<script>/*PRUEBA*/(()=>{const h=new URLSearchParams(location.hash.slice(1));for(const a of (h.get('a')||'').split(';').filter(Boolean)){const [sel,val]=a.split('=');const el=document.querySelectorAll('input,button')[+sel];if(val!==undefined&&el.type==='range'){el.value=val;el.dispatchEvent(new Event('input'));}else el.click();}})();</script>
+</body>
+</html>

@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Decodifica paso a paso una palabra ARINC 429 en hexadecimal, como la da el analizador de bus, hasta el valor.">
+<title>Decodificar una palabra ARINC 429 · 1428</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .fig { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; min-width: 0; display: grid; gap: 8px; }
+  .fig > h2 { margin: 0; font-family: var(--serif); font-size: 1.05rem; color: var(--navy); }
+  .fig .lienzo { border: 0; border-radius: 0; }
+  .nota-etq { color: #C4821E; font-size: .92rem; margin: 0; }
+  @media (max-width: 520px) { .fig { padding: 10px 8px; } }
+  .control .linea { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .control .linea input { flex: 1 1 8em; width: 8em; font-size: 1.15rem; letter-spacing: .08em; text-transform: uppercase; }
+  .ejer { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ejer .btn { background: #FAEEDA; border-color: #E8C58C; min-width: 44px; padding: 8px 10px; }
+  .ejer .btn:hover { background: #FAC775; }
+  .btn.azar { background: #E1F5EE; border-color: #A9DCC8; flex: 1 1 100%; }
+  .msg { color: #A87600; font-weight: 700; margin: 0; min-height: 1.5em; }
+  table.pasos { border-collapse: collapse; width: 100%; font-size: 1rem; }
+  table.pasos th { text-align: left; vertical-align: top; color: #C4821E; padding: 6px 12px 6px 0; white-space: nowrap; font-weight: 700; }
+  table.pasos td { padding: 6px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+  table.pasos tr:last-child td { border-bottom: 0; }
+  table.pasos td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .95rem; }
+  table.pasos td.fuerte { font-weight: 700; }
+  .oculto { text-align: center; color: var(--muted); font-size: 1.2rem; padding: 28px 8px; margin: 0; }
+  table.datos.dicc { font-size: .88rem; }
+  table.datos.dicc th { background: #0A1F3C; color: #fff; }
+  table.datos.dicc tr.activa td { background: #FDF1DD; }
+  @media (max-width: 900px) {
+    .sim > .escena, .sim > .lateral { display: contents; }
+    #f-palabra { order: 1; } #t-mandos { order: 2; } #t-pasos { order: 3; } #t-dicc { order: 4; }
+  }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1428 Técnicas digitales y sistemas de instrumentos electrónicos</a></p>
+    <h1>Decodificar una palabra ARINC 429</h1>
+    <p class="sub">UD4 · Buses de datos · del hexadecimal del analizador de bus al valor del parámetro (apuntes, págs. 5-8 y 11)</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div class="fig" id="f-palabra">
+        <h2>La palabra bit a bit (bit 32 a la izquierda)</h2>
+        <div class="lienzo" id="palabra"></div>
+        <p class="nota-etq">La etiqueta se lee del bit 1 al bit 8 (el bit 1 es su MSB): en el hexadecimal aparece al revés.</p>
+      </div>
+      <div class="panel" id="t-pasos"><h2>Decodificación paso a paso</h2><div id="pasos"></div></div>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta" id="t-mandos"><h2>Mandos</h2><div class="controles" id="mandos"></div></div>
+      <div class="tarjeta" id="t-dicc"><h2>Diccionario de etiquetas</h2><div class="tabla-wrap" id="dicc"></div>
+        <p class="nota-ref">BNR: N (con el bit 29 como signo, en complemento a dos) × resolución; resolución = escala ÷ 2^bits.<br>BCD: 5 dígitos (3+4+4+4+4 bits); el signo, en la SSM.</p>
+      </div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué hace</h2>
+      <ul>
+        <li>Escribe una palabra de 32 bits en hexadecimal (como la muestra un analizador de bus) y pulsa Intro.</li>
+        <li>Se ve la palabra bit a bit (bit 32 a la izquierda), coloreada por campos, y la decodificación paso a paso: paridad → etiqueta → SDI → SSM → datos → valor, con el diccionario de etiquetas del ejercicio.</li>
+        <li>«Ocultar pasos» deja solo los bits, para que la clase decodifique primero y luego se compruebe.</li>
+        <li>Los botones cargan el ejemplo y las 6 palabras del ejercicio. «Palabra nueva al azar» crea otra palabra (a veces con NCD o con error de paridad) para practicar más.</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Para corregir en clase</h2>
+      <p>Sirve para corregir el ejercicio «UD4 - Ejercicio de decodificación ARINC 429»: oculta los pasos, deja que la clase decodifique cada palabra y muéstralos después para comprobar.</p>
+      <p class="nota-ref">Diccionario: el mismo del ejercicio; etiquetas habituales de ARINC 429 con escalas adaptadas para la clase. Apuntes de la UD4, págs. 5-8 y 11.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1428 · Técnicas digitales y sistemas de instrumentos electrónicos en aeromecánica · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  // ── CÁLCULO (inicio)
+  const DICC = {
+    "001": ["Distancia al destino", "BCD", 0.1, 5, "NM"],
+    "203": ["Altitud de presión", "BNR", 131072, 17, "ft"],
+    "205": ["Número de Mach", "BNR", 4.096, 16, ""],
+    "206": ["Velocidad calibrada (CAS)", "BNR", 1024, 14, "kt"],
+    "213": ["Temperatura estática (SAT)", "BNR", 512, 11, "°C"],
+    "320": ["Rumbo magnético", "BNR", 180, 15, "°"],
+  };
+  const SSM_BNR = ["aviso de fallo", "NCD (dato no computado)", "test funcional", "operación normal"];
+  const SSM_BCD = ["más (norte, este…)", "NCD (dato no computado)", "test funcional", "menos (sur, oeste…)"];
+  const SDI_T = ["todas las instalaciones", "instalación 1", "instalación 2", "instalación 3"];
+  const EJERCICIO = [["Ejemplo", "63E80061"], ["1", "E445C1C1"], ["2", "FE3C00D1"], ["3", "848D1480"],
+    ["4", "7800000B"], ["5", "230C02A1"], ["6", "64440061"]];
+
+  function roundPy(x) {
+    if (Math.abs(x % 1) === 0.5) return 2 * Math.round(x / 2);
+    return Math.round(x);
+  }
+  function fijoPy(x, dec) {
+    const neg = x < 0 || Object.is(x, -0);
+    const s = Math.abs(x).toFixed(100);
+    let [e, f] = s.split(".");
+    let digs = (e + f.slice(0, dec)).split("").map(Number);
+    const resto = f.slice(dec);
+    const sube = resto[0] > "5" || (resto[0] === "5" && (/[1-9]/.test(resto.slice(1)) || digs[digs.length - 1] % 2 === 1));
+    if (sube) {
+      let i = digs.length - 1;
+      while (i >= 0) { if (digs[i] === 9) { digs[i] = 0; i--; } else { digs[i]++; break; } }
+      if (i < 0) digs.unshift(1);
+    }
+    const ent = digs.slice(0, digs.length - dec).join("") || "0";
+    const fr = digs.slice(digs.length - dec).join("");
+    return (neg ? "-" : "") + ent + (dec > 0 ? "." + fr : "");
+  }
+  // num() del Python: decimales justos (máx. 7), millares con punto, coma decimal, signo «−»
+  function num(x, dec) {
+    if (dec === undefined) {
+      if (Number.isInteger(x)) dec = 0;
+      else { const fr = fijoPy(x, 7).replace(/0+$/, "").split(".")[1] || ""; dec = Math.min(7, fr.length); }
+    }
+    let [e, f] = fijoPy(Math.abs(x), dec).split(".");
+    e = e.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return (x < 0 ? "−" : "") + (f !== undefined ? e + "," + f : e);
+  }
+  const bin = (v, n) => v.toString(2).padStart(n, "0");
+
+  function codificar(et, val, sdi, ssm, ruido = null) {
+    const [, fmt, esc, nb] = DICC[et];
+    const b = new Array(33).fill(0);
+    const d = et.split("").map(Number);
+    const eb = bin(d[0], 2) + bin(d[1], 3) + bin(d[2], 3);
+    for (let k = 0; k < 8; k++) b[1 + k] = Number(eb[k]);
+    b[9] = sdi & 1; b[10] = sdi >> 1;
+    if (fmt === "BNR") {
+      const n = roundPy(val / (esc / 2 ** nb)) & ((1 << (nb + 1)) - 1);
+      for (let k = 0; k <= nb; k++) b[29 - nb + k] = (n >> k) & 1;
+    } else {
+      const dig = String(roundPy(val / esc)).padStart(nb, "0");
+      const cad = bin(Number(dig[0]), 3) + dig.slice(1).split("").map((c) => bin(Number(c), 4)).join("");
+      for (let k = 0; k < cad.length; k++) b[29 - k] = Number(cad[k]);
+    }
+    b[30] = ssm & 1; b[31] = ssm >> 1;
+    let u = 0; for (let k = 1; k <= 31; k++) u += b[k];
+    b[32] = u % 2 === 0 ? 1 : 0;
+    if (ruido) b[ruido] ^= 1;
+    let w = 0; for (let k = 1; k <= 32; k++) w += b[k] * 2 ** (k - 1);
+    return w;
+  }
+
+  function campo(k, fmt, lsb) {
+    if (k <= 8) return "ETQ";
+    if (k <= 10) return "SDI";
+    if (k === 29 && fmt === "BNR") return "SIGNO";
+    if (k <= 29) return fmt === "BNR" && k < lsb ? "PAD" : "DATOS";
+    return k <= 31 ? "SSM" : "P";
+  }
+
+  function decodificar(w) {
+    const b = [0]; for (let k = 1; k <= 32; k++) b.push(Math.floor(w / 2 ** (k - 1)) % 2);
+    let eb = ""; for (let k = 1; k <= 8; k++) eb += b[k];
+    const et = `${parseInt(eb.slice(0, 2), 2)}${parseInt(eb.slice(2, 5), 2)}${parseInt(eb.slice(5), 2)}`;
+    const unos = b.reduce((s, x) => s + x, 0);
+    const r = { b, unos, eb, et, sdi: b[10] * 2 + b[9], ssm: b[31] * 2 + b[30], ok: unos % 2 === 1 };
+    if (et in DICC) {
+      const [nombre, fmt, esc, nb, ud] = DICC[et];
+      Object.assign(r, { nombre, fmt, ud, nb, esc });
+      if (fmt === "BNR") {
+        const lsb = 29 - nb;
+        let crudo = 0; for (let k = lsb; k <= 29; k++) crudo += b[k] * 2 ** (k - lsb);
+        const n = b[29] ? crudo - 2 ** (nb + 1) : crudo;
+        let datos = ""; for (let k = 28; k >= lsb; k--) datos += b[k];
+        Object.assign(r, { lsb, crudo, n, valor: n * esc / 2 ** nb, datos });
+      } else {
+        let cad = ""; for (let k = 29; k >= 11; k--) cad += b[k];
+        const gr = [cad.slice(0, 3)]; for (let i = 0; i < 4; i++) gr.push(cad.slice(3 + 4 * i, 7 + 4 * i));
+        const digs = gr.map((g) => parseInt(g, 2));
+        Object.assign(r, { lsb: 11, gr, digs, valor: Math.max(...digs) <= 9 ? Number(digs.join("")) * esc : null });
+      }
+    }
+    return r;
+  }
+
+  // Líneas de la decodificación paso a paso: [rótulo, texto, color]
+  const TXT = "#1F2937", OK_E = "#0F6E56", ER_E = "#A32D2D", NAVY = "#0A1F3C";
+  function lineas(w) {
+    const r = decodificar(w);
+    const fmt = r.fmt || "BNR";
+    const hx = w.toString(16).toUpperCase().padStart(8, "0");
+    const L = [];
+    L.push(["1 · Binario", `${hx} → ` + hx.split("").map((c) => bin(parseInt(c, 16), 4)).join(" "), TXT]);
+    L.push(["2 · Paridad", `${r.unos} unos → ` + (r.ok ? "impar: palabra válida" : "PAR: error, se descarta"), r.ok ? OK_E : ER_E]);
+    if (r.ok) {
+      const eb = r.eb;
+      L.push(["3 · Etiqueta", `bits 1→8 = ${eb.slice(0, 2)} ${eb.slice(2, 5)} ${eb.slice(5)} → ${r.et}₈` + ("nombre" in r ? `: ${r.nombre}` : " (no está en el diccionario)"), TXT]);
+      L.push(["4 · SDI", `bits 10-9 = ${r.sdi >> 1}${r.sdi & 1} → ${SDI_T[r.sdi]}`, TXT]);
+      if ("nombre" in r) {
+        const ssmT = (fmt === "BNR" ? SSM_BNR : SSM_BCD)[r.ssm];
+        L.push(["5 · SSM", `bits 31-30 = ${r.ssm >> 1}${r.ssm & 1} → ${ssmT}`, (fmt === "BCD" && (r.ssm === 0 || r.ssm === 3)) || r.ssm === 3 ? OK_E : ER_E]);
+        const us = r.ud && r.ud !== "°" ? ` ${r.ud}` : r.ud;
+        if (fmt === "BNR") {
+          const nb = r.nb;
+          L.push(["6 · Datos", `signo (29) = ${r.b[29]} · bits 28-${r.lsb} = ${r.datos}`, TXT]);
+          if (r.b[29]) L.push(["    N", `${num(r.crudo)} − ${num(2 ** (nb + 1))} = ${num(r.n)} (complemento a dos)`, TXT]);
+          else L.push(["    N", `${num(r.n)}`, TXT]);
+          const res = r.esc / 2 ** nb;
+          const resT = Math.abs(Number(num(res).replace(/\./g, "").replace(",", ".")) - res) < 1e-12 ? num(res) : `(${num(r.esc)} ÷ ${num(2 ** nb)})`;
+          L.push(["7 · Valor", `N × resolución = ${num(r.n)} × ${resT} = ${num(r.valor)}${us}`, NAVY]);
+          if (r.et === "320" && r.valor < 0) L.push(["", `rumbo negativo: ${num(r.valor)}° + 360° = ${num(r.valor + 360)}°`, NAVY]);
+        } else {
+          L.push(["6 · Datos", r.gr.join("  ") + " → " + r.digs.join(" "), TXT]);
+          if (r.valor === null) L.push(["7 · Valor", "algún grupo pasa de 9: no es un BCD válido", ER_E]);
+          else {
+            const signo = r.ssm === 3 ? "−" : "";
+            L.push(["7 · Valor", `${r.digs.join("")} × ${num(r.esc)} = ${signo}${num(r.valor)}${us}`, NAVY]);
+          }
+        }
+        if (([0, 1, 2].includes(r.ssm) && fmt === "BNR") || ([1, 2].includes(r.ssm) && fmt === "BCD"))
+          L.push(["¡Ojo!", "con esta SSM el receptor NO usa el dato (bandera o rayas en pantalla)", ER_E]);
+      }
+    } else {
+      L.push(["", "La paridad detecta el error, pero no dice qué bit ha cambiado.", ER_E]);
+      L.push(["", "El receptor no decodifica la palabra y mantiene el último valor bueno.", ER_E]);
+    }
+    return L;
+  }
+
+  // Filas del diccionario: [etiqueta, parámetro, formato, escala, bits]
+  function filasDicc() {
+    return Object.entries(DICC).map(([et, [nom, f, esc, nb, ud]]) => {
+      const us = ud && ud !== "°" ? ` ${ud}` : ud;
+      return [et, `${et}₈`, nom, f, f === "BNR" ? `±${num(esc)}${us}` : `${nb} díg. ×${num(esc)}`, f === "BNR" ? String(nb) : "29-11"];
+    });
+  }
+
+  function validarHex(t) {
+    t = t.trim().toUpperCase().replace(/ /g, "");
+    return /^[0-9A-F]{8}$/.test(t) ? t : null;
+  }
+
+  // Palabra nueva al azar (como azar() del Python)
+  function palabraAzar(rnd = Math.random) {
+    const elige = (a) => a[Math.floor(rnd() * a.length)];
+    const uniforme = (a, b) => a + (b - a) * rnd();
+    const et = elige(Object.keys(DICC));
+    const [, f, esc, nb] = DICC[et];
+    let val, ssm;
+    if (f === "BNR") {
+      const res = esc / 2 ** nb;
+      const lim = { "203": 41000, "205": 0.9, "206": 350, "213": 40, "320": 180 }[et];
+      const lo = { "203": 0, "205": 0.2, "206": 100, "213": -60, "320": -180 }[et];
+      val = roundPy(uniforme(lo, lim) / res) * res;
+      ssm = elige([3, 3, 3, 3, 1, 0]);
+    } else {
+      val = Math.round(uniforme(0, 3000) * 10) / 10;
+      ssm = elige([0, 0, 0, 1]);
+    }
+    const ruido = elige([null, null, null, null, 11 + Math.floor(rnd() * 18)]);
+    const w = codificar(et, val, elige([0, 0, 1, 2]), ssm, ruido);
+    return w.toString(16).toUpperCase().padStart(8, "0");
+  }
+  // ── CÁLCULO (fin)
+
+  const GRIS = "#5A6675";
+  const COL = { P: ["#F2A93B", "#854F0B"], SSM: ["#EEEDFE", "#534AB7"], DATOS: ["#E1F5EE", "#0F6E56"],
+    SIGNO: ["#EEEDFE", "#534AB7"], SDI: ["#E6F1FB", "#185FA5"], ETQ: ["#FAEEDA", "#BA7517"], PAD: ["#F1EFE8", "#888780"] };
+  const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  const st = { hex: "63E80061", ver: true, msg: "" };
+
+  function lienzoAdaptable(cont, o, altoDe) {
+    const L = new Sim.Lienzo(cont, o);
+    const ajustar = L._ajustar.bind(L);
+    L._ajustar = () => { const w = Math.max(50, L.canvas.parentElement.clientWidth); L.proporcion = altoDe(w) / w; ajustar(); };
+    L._ajustar();
+    return L;
+  }
+
+  // ── Palabra: cifras hexadecimales, bits, números de bit y campos (una o dos filas de 16 bits)
+  const BLOQUE = 128;
+  const lienzo = lienzoAdaptable("#palabra", { etiqueta: "La palabra ARINC 429 bit a bit, con sus cifras hexadecimales" },
+    (w) => (w < 620 ? 2 * BLOQUE + 8 : BLOQUE + 4));
+  lienzo.o.dibujar = (ctx, w) => {
+    const word = parseInt(st.hex, 16);
+    const r = decodificar(word);
+    const fmt = r.fmt || "BNR", lsb = r.lsb || 11;
+    const dos = w < 620;
+    const grupos = dos ? [[32, 17], [16, 1]] : [[32, 1]];
+    const n = dos ? 16 : 32;
+    const cw = (w - 4) / n;
+    let tramos = [["P", 32, 32], ["SSM", 31, 30]];
+    tramos = tramos.concat(fmt === "BNR" ? [["±", 29, 29], ["DATOS", 28, lsb]].concat(lsb > 11 ? [["sin usar", lsb - 1, 11]] : []) : [["DATOS BCD", 29, 11]]);
+    tramos.push(["SDI", 10, 9], ["ETIQUETA", 8, 1]);
+    grupos.forEach(([gHi, gLo], g) => {
+      const y0 = 4 + g * (BLOQUE + 4);
+      const xDe = (bit) => 2 + (gHi - bit) * cw;
+      // cifras hexadecimales sobre sus 4 bits
+      for (let j = 0; j < 8; j++) {
+        const hi = 32 - 4 * j;
+        if (hi > gHi || hi < gLo) continue;
+        Sim.caja(ctx, xDe(hi) + 1.5, y0, 4 * cw - 3, 30, { relleno: "#F3F6FA", color: "#B4BCC8", ancho: 1, radio: 4 });
+        ctx.save(); ctx.font = `bold 20px ${MONO}`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = NAVY;
+        ctx.fillText(st.hex[j], xDe(hi) + 2 * cw, y0 + 16); ctx.restore();
+      }
+      for (let k = gHi; k >= gLo; k--) {
+        const c = campo(k, fmt, lsb);
+        const [f, e] = COL[c];
+        const x = xDe(k) + 1.5, ww = cw - 3, y = y0 + 36, hh = 40;
+        Sim.caja(ctx, x, y, ww, hh, { relleno: r.b[k] || c === "P" ? f : "#FFFFFF", color: e, ancho: 1.2, radio: 2 });
+        ctx.save(); ctx.font = `${r.b[k] ? "bold " : ""}${Math.min(18, cw * 0.85)}px ${MONO}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillStyle = r.b[k] ? TXT : "#9AA3AE"; ctx.fillText(String(r.b[k]), x + ww / 2, y + hh / 2 + 1); ctx.restore();
+        Sim.texto(ctx, String(k), xDe(k) + cw / 2, y0 + 86, { tam: cw < 16 ? 9 : 10.5, alin: "center", base: "middle", color: GRIS });
+      }
+      for (const [nom, hi, lo] of tramos) {
+        const a = Math.min(hi, gHi), z = Math.max(lo, gLo);
+        if (a < z) continue;
+        const clave = { P: "P", SSM: "SSM", "±": "SIGNO", SDI: "SDI", ETIQUETA: "ETQ", "sin usar": "PAD" }[nom] || "DATOS";
+        const [f, e] = COL[clave];
+        const x = xDe(a) + 1, ancho = (a - z + 1) * cw - 2;
+        Sim.caja(ctx, x, y0 + 96, ancho, 24, { relleno: f, color: e, ancho: 1, radio: 3 });
+        ctx.font = `bold 12px ${Sim.FUENTE}`;
+        let t = nom;
+        if (ctx.measureText(t).width > ancho - 3) t = { ETIQUETA: "ETQ", "DATOS BCD": "DATOS", "sin usar": "—" }[nom] || "";
+        if (t && ctx.measureText(t).width <= ancho - 2)
+          Sim.texto(ctx, t, x + ancho / 2, y0 + 108, { tam: 12, negrita: true, alin: "center", base: "middle", color: clave === "P" ? "#412402" : e });
+      }
+    });
+  };
+
+  // ── Mandos
+  const mandos = document.getElementById("mandos");
+  const inp = Sim.el("input", { type: "text", id: "hex", value: st.hex, class: "mono", maxlength: "11", autocomplete: "off", spellcheck: "false", autocapitalize: "characters" });
+  const bVer = Sim.el("button", { type: "button", class: "btn", text: "Ocultar pasos" });
+  mandos.append(Sim.el("div", { class: "control" }, Sim.el("label", { class: "etq", for: "hex", text: "Palabra (hex):" }), Sim.el("div", { class: "linea" }, inp, bVer)));
+  const enviar = () => {
+    const t = validarHex(inp.value);
+    if (t) { st.hex = t; st.msg = ""; inp.value = t; } else st.msg = "Escribe 8 cifras hexadecimales (0-9, A-F).";
+    dibujar();
+  };
+  inp.addEventListener("change", enviar);
+  inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); enviar(); } });
+  bVer.addEventListener("click", () => { st.ver = !st.ver; bVer.textContent = st.ver ? "Ocultar pasos" : "Mostrar pasos"; dibujar(); });
+  const fila = Sim.el("div", { class: "control" }, Sim.el("p", { class: "grupo-titulo", text: "Palabras del ejercicio" }));
+  const ejer = Sim.el("div", { class: "ejer" });
+  for (const [lab, hx] of EJERCICIO) {
+    const b = Sim.el("button", { type: "button", class: "btn", text: lab });
+    b.addEventListener("click", () => cargar(hx));
+    ejer.append(b);
+  }
+  fila.append(ejer); mandos.append(fila);
+  Sim.boton(mandos, "Palabra nueva al azar", () => cargar(palabraAzar(), "Palabra nueva: decodificadla antes de mirar los pasos.")).classList.add("azar");
+  const msg = Sim.el("p", { class: "msg", role: "status" });
+  mandos.append(msg);
+
+  function cargar(hx, m = "") { st.hex = hx.toUpperCase(); st.msg = m; inp.value = st.hex; dibujar(); }
+
+  const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  function dibujar() {
+    const w = parseInt(st.hex, 16);
+    if (!st.ver) {
+      Sim.html("#pasos", '<p class="oculto">Pasos ocultos: decodificad la palabra<br>y pulsad «Mostrar pasos» para comprobar.</p>');
+    } else {
+      Sim.html("#pasos", '<table class="pasos"><tbody>' + lineas(w).map(([t1, t2, c]) => {
+        const mono = t1.startsWith("1") || t1.startsWith("    N");
+        return `<tr><th scope="row">${esc(t1.trim())}</th><td class="${mono ? "mono" : ""}${t1.startsWith("7") ? " fuerte" : ""}" style="color:${c}">${esc(t2)}</td></tr>`;
+      }).join("") + "</tbody></table>");
+    }
+    const et = decodificar(w).et;
+    Sim.html("#dicc", '<table class="datos dicc"><thead><tr><th>Etiq.</th><th>Parámetro</th><th>Form.</th><th>Escala</th><th>Bits</th></tr></thead><tbody>' +
+      filasDicc().map(([e, ...c]) => `<tr${e === et ? ' class="activa"' : ""}>${c.map((x) => `<td>${esc(x)}</td>`).join("")}</tr>`).join("") + "</tbody></table>");
+    msg.textContent = st.msg;
+    lienzo.pedir();
+  }
+  dibujar();
+})();
+</script>
+</body>
+</html>

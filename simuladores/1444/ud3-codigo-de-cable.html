@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Recorre el código de identificación de un cable campo a campo, cambia sus valores y mira qué significa cada parte.">
+<title>Lector del código de un cable · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .codigo { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 14px; }
+  .codigo .lectura { margin: 0; font-weight: 700; color: var(--navy); font-size: 1.2rem; overflow-wrap: anywhere; }
+  .codigo .lectura span { font-family: var(--serif); letter-spacing: .04em; }
+  .campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(86px, 1fr)); gap: 10px; }
+  .campo { font: inherit; cursor: pointer; background: none; border: 0; padding: 0; display: grid; gap: 6px; align-content: start; text-align: center; color: var(--muted); }
+  .campo .v {
+    display: grid; place-items: center; min-height: 88px; border-radius: 10px; border: 2px solid var(--navy);
+    background: var(--navy); color: var(--gold); font-family: var(--serif); font-weight: 700; font-size: clamp(1.8rem, 4vw, 2.6rem); line-height: 1;
+  }
+  .campo .n { font-size: .95rem; line-height: 1.2; }
+  .campo.sel .v { background: var(--gold); color: var(--navy); }
+  .campo.sel .n { color: var(--ink); font-weight: 700; }
+  .campo:hover .v { border-color: var(--gold); }
+  .campo:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 10px; }
+  .codigo .nota { margin: 0; color: var(--muted); font-style: italic; font-size: .95rem; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Lector del código de un cable</h1>
+    <p class="sub">UD3 · CE d · CE f · identificación de cables</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div class="codigo">
+        <p class="lectura">Código: <span id="lectura"></span></p>
+        <div class="campos" id="campos"></div>
+        <p class="nota" id="nota"></p>
+      </div>
+      <div class="panel"><h2>Qué significa el campo elegido</h2><div class="salida" id="salida"></div></div>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Mandos</h2><div class="controles" id="mandos"></div></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Elige qué código quieres leer, recorre sus campos con los botones (o tocando cada casilla) y cambia el valor de cada campo: el panel explica qué significa. Empieza con los ejemplos de los apuntes:</p>
+      <ul>
+        <li>Código de función en el circuito (UD3, fig. 33): R N 314 A 20 N.</li>
+        <li>Marcado del fabricante ECA (UD1, fig. 33 de la UD1): A 1 604 – 1 D 22.</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Preguntas para el alumnado</h2>
+      <ul>
+        <li>¿Qué campo cambia entre dos segmentos del mismo cable?</li>
+        <li>¿Qué cable es más grueso, el de galga 16 o el de galga 22?</li>
+        <li>¿Cada cuánto se repite la marca a lo largo del cable?</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Datos de referencia</h2>
+      <p class="nota-ref">No están en los apuntes; mandan el manual del avión y el WDM. El significado de las letras de función (R radio, L iluminación, P potencia CC…) y de la última letra (N tierra; A, B, C fases de CA; CH/AL termopar) sigue la norma militar MIL-W-5088 / SAE AS50881, que usan muchos fabricantes. Las secciones AWG son nominales.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  /* calc:inicio */
+  const REF = " (dato de referencia)";
+  const cada = (vals, f) => [...vals].map((v) => [v, f(v)]);
+  const FUNCION = [ // [campo, [[valor, significado], …]]
+    ["Función del circuito", [["R", "R: radio, navegación y comunicación" + REF], ["L", "L: iluminación" + REF],
+      ["P", "P: potencia de corriente continua" + REF], ["X", "X: potencia de corriente alterna" + REF],
+      ["G", "G: tren de aterrizaje" + REF], ["Q", "Q: combustible y aceite" + REF], ["W", "W: avisos y emergencia" + REF]]],
+    ["Designación del circuito", cada("NADK", (v) => `${v}: distingue este circuito de los demás de la misma función. La letra la asigna el fabricante y se busca en el WDM.`)],
+    ["Número de cable", cada(["314", "007", "152", "560"], (v) => `${v}: número del cable dentro de ese circuito.`)],
+    ["Segmento", cada("ABCD", (v) => `${v}: tramo del cable entre dos puntos del circuito (conector, regleta, empalme). El mismo cable con otra letra es otro tramo.`)],
+    ["Diámetro (galga)", [["20", "20: galga AWG 20, unos 0,52 mm²" + REF + "."], ["22", "22: galga AWG 22, unos 0,33 mm²" + REF + "."],
+      ["24", "24: galga AWG 24, unos 0,21 mm²" + REF + "."], ["18", "18: galga AWG 18, unos 0,82 mm²" + REF + "."],
+      ["16", "16: galga AWG 16, unos 1,31 mm²" + REF + "."], ["12", "12: galga AWG 12, unos 3,31 mm²" + REF + "."]]],
+    ["Fase, tierra o termopar", [["N", "N: cable de tierra, retorno a masa" + REF], ["A", "A: fase A de corriente alterna" + REF],
+      ["B", "B: fase B de corriente alterna" + REF], ["C", "C: fase C de corriente alterna" + REF],
+      ["CH", "CH: termopar, conductor de cromel" + REF], ["AL", "AL: termopar, conductor de alumel" + REF]]],
+  ];
+  const FABRICANTE = [
+    ["Fabricante", [["A", "A: denominación del fabricante (en el ejemplo de los apuntes, ECA)."]]],
+    ["Tipo de cable", [["1", "1: cable ordinario."], ["0", "0: cable blindado (apantallado)."]]],
+    ["Referencia", cada(["604", "717", "512"], (v) => `${v}: referencia que asigna el fabricante al tipo de cable.`)],
+    ["Reserva", [["–", "–: reserva para modificaciones. Sin modificar, va un guion."],
+      ["B", "B: el guion se sustituye por una letra mayúscula cuando hay una modificación."]]],
+    ["N.º de conductores", [["1", "1: un conductor."], ["2", "2: cable bifilar (dos conductores)."], ["3", "3: tres conductores."]]],
+    ["Código de color", [["D", "D: código de color (A amarillo, B azul, C rojo…; la tabla completa la da el fabricante)."],
+      ["A", "A: amarillo."], ["B", "B: azul."], ["C", "C: rojo."]]],
+    ["Calibre AWG", [["22", "22: calibre AWG 22."], ["20", "20: calibre AWG 20 (en el ejemplo FILECA de los apuntes, 0,6 mm²)."],
+      ["24", "24: calibre AWG 24."]]],
+  ];
+  const MODOS = { "Código de función (UD3)": FUNCION, "Marcado del fabricante (UD1)": FABRICANTE };
+  const NOTA = {
+    "Código de función (UD3)": "Se marca en cada segmento (impresión, etiqueta o pintado) cada 35 cm como máximo\ny a 10 cm como máximo de cada extremo. Los cables de menos de 10 cm no se marcan.",
+    "Marcado del fabricante (UD1)": "Fabricante, tipo, año de fabricación y galga, legibles y permanentes, a lo largo del cable.\nEl último campo de la UD1 es una variante que depende de la calidad del cable.",
+  };
+
+  // estado: {modo, campo, idx: {"modo|k": i}}
+  function valores(st) {
+    const campos = MODOS[st.modo];
+    return { campos, idx: campos.map((_, k) => st.idx[st.modo + "|" + k] || 0) };
+  }
+  function mover(st, paso) { const n = MODOS[st.modo].length; st.campo = (st.campo + paso + n) % n; }
+  function cambiar(st) {
+    const { campos, idx } = valores(st), k = st.campo;
+    st.idx[st.modo + "|" + k] = (idx[k] + 1) % campos[k][1].length;
+  }
+  function informe(st) {
+    const { campos, idx } = valores(st);
+    const [nombre, opts] = campos[st.campo];
+    const i = idx[st.campo];
+    return {
+      lectura: campos.map(([, o], k) => o[idx[k]][0]).join("  "),
+      salida: `Campo ${st.campo + 1} de ${campos.length}: ${nombre}\n\n${opts[i][1]}\n\n` +
+              `Valores posibles en esta demostración: ${opts.map((o) => o[0]).join(", ")}`,
+    };
+  }
+  /* calc:fin */
+
+  const st = { modo: Object.keys(MODOS)[0], campo: 0, idx: {} };
+  const cajaCampos = document.getElementById("campos");
+
+  function dibujar() {
+    const { campos, idx } = valores(st);
+    cajaCampos.replaceChildren(...campos.map(([nombre, opts], k) => {
+      const b = Sim.el("button", { type: "button", class: "campo" + (k === st.campo ? " sel" : ""), "aria-pressed": String(k === st.campo) },
+        Sim.el("span", { class: "v", text: opts[idx[k]][0] }), Sim.el("span", { class: "n", text: nombre }));
+      b.addEventListener("click", () => { if (st.campo === k) cambiar(st); else st.campo = k; dibujar(); });
+      return b;
+    }));
+    const inf = informe(st);
+    document.getElementById("lectura").textContent = inf.lectura;
+    document.getElementById("nota").textContent = NOTA[st.modo];
+    document.getElementById("salida").textContent = inf.salida;
+  }
+
+  Sim.opciones("#mandos", { titulo: "Código que lees", etiquetas: Object.keys(MODOS), activa: 0,
+    alCambiar: (i, t) => { st.modo = t; st.campo = 0; dibujar(); } });
+  Sim.boton("#mandos", "◀  Campo anterior", () => { mover(st, -1); dibujar(); });
+  Sim.boton("#mandos", "Campo siguiente  ▶", () => { mover(st, 1); dibujar(); });
+  Sim.boton("#mandos", "Cambiar el valor del campo", () => { cambiar(st); dibujar(); }, { primario: true });
+  const ayuda = Sim.el("p", { class: "nota-ref", text: "También puedes tocar una casilla para elegir el campo y volver a tocarla para cambiar su valor." });
+  document.getElementById("mandos").append(ayuda);
+  dibujar();
+})();
+</script>
+</body>
+</html>

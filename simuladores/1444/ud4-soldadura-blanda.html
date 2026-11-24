@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Cambia la potencia del soldador, la pieza y las condiciones, y mira si la unión llega a la temperatura de soldar.">
+<title>Soldadura blanda: calentar la unión · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .aviso-sold { font-weight: 700; white-space: pre-line; margin: 0; font-size: 1.15rem; }
+  .aviso-sold.doble { font-size: 1rem; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Soldadura blanda: calentar la unión</h1>
+    <p class="sub">UD4 · CE d · e · soldador, punta y pieza</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div id="grafica"></div>
+      <div class="tarjeta"><h2>Mandos</h2><div class="fila"><div class="controles" id="mandos"></div><div class="controles" id="mandos2"></div></div></div>
+    </div>
+    <aside class="lateral">
+      <div class="panel"><h2>Resultado</h2><div class="salida" id="salida"></div></div>
+      <div class="panel"><p class="aviso-sold" id="aviso"></p></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Curva de temperatura de la unión (y de la punta) frente al tiempo según la potencia del soldador, la masa de la pieza, si la punta está limpia y si se sujeta con alicates. Marca la zona en la que funde el estaño y avisa de soldadura fría si la pieza se mueve antes de que el estaño se solidifique.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Preguntas para el alumnado</h2>
+      <ul>
+        <li>¿Por qué tarda más con la punta sucia?</li>
+        <li>¿Por qué no sirve un soldador de 15 W para una pletina?</li>
+        <li>¿Qué pasa si soplas o recolocas el cable con el estaño aún fundido?</li>
+        <li>¿Por qué en electrónica no se pasa de 30 W?</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Datos de referencia</h2>
+      <p class="nota-ref">Modelo térmico sencillo de dos cuerpos (punta y unión); los valores son orientativos, no de un soldador concreto. El estaño 60/40 empieza a fundir a 183 °C; los apuntes dan «unos 200 °C». Por encima de 350 °C hay riesgo para un componente de la placa (dato de referencia).</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  /* calc:inicio */
+  const TA = 20.0;                         // temperatura ambiente (°C)
+  const T_SOLIDO = 183.0, T_FUNDE = 200.0; // el estaño 60/40 empieza a fundir a 183 °C; los apuntes dan «unos 200 °C»
+  const T_DANO = 350.0;                    // por encima, riesgo para un componente de la placa (dato de referencia)
+  // pieza: [capacidad térmica J/K, pérdidas de la pieza al aire y a la placa W/K]
+  const PIEZAS = { "Pin de un componente (placa)": [0.15, 0.04], "Terminal de cable AWG 20": [0.5, 0.04], "Pletina o terminal grande": [1.5, 0.025] };
+  const NOMBRES = Object.keys(PIEZAS);
+  const T_FIN = 12.0, DT = 0.01;
+
+  // t, temperatura de la punta y de la unión. El soldador toca la unión hasta tRet.
+  function simular(potencia, pieza, limpia, alicates, tRet) {
+    let [cJ, gJ] = PIEZAS[pieza];
+    const tReposo = TA + 300 * Math.pow(potencia / 30, potencia <= 30 ? 0.35 : 0.6); // punta en vacío: 15 W → 264 °C, 30 W → 320 °C, 60 W → 475 °C
+    const gAire = potencia / (tReposo - TA);  // pérdidas de la punta al aire
+    const gC = limpia ? 0.25 : 0.05;         // contacto térmico punta–pieza: la suciedad (óxido) aísla
+    gJ = gJ + (alicates ? 0.05 : 0.0);       // los alicates se llevan parte del calor
+    const cT = 3.0;                          // capacidad térmica de la punta
+    const n = Math.floor(T_FIN / DT) + 1;
+    const t = Sim.linspace(0, T_FIN, n), tp = new Array(n), tu = new Array(n);
+    let a = tReposo, b = TA;
+    for (let i = 0; i < n; i++) {
+      tp[i] = a; tu[i] = b;
+      const q = t[i] < tRet ? gC * (a - b) : 0.0;
+      a += DT * (potencia - gAire * (a - TA) - q) / cT;
+      b += DT * (q - gJ * (b - TA)) / cJ;
+    }
+    return { t, tp, tu };
+  }
+
+  function analizar(pot, tRet, tMov, pieza, limpia, alicates) {
+    const { t, tp, tu } = simular(pot, pieza, limpia, alicates, tRet);
+    const tm = Math.min(tRet + tMov, T_FIN);
+    const iF = tu.findIndex((v, i) => v >= T_FUNDE && t[i] <= tRet);
+    const tFunde = iF >= 0 ? t[iF] : null;
+    const tMax = Math.max(...tu);
+    const iMov = Math.min(Math.round(tm / DT), t.length - 1);
+    const tEnMov = tu[iMov];
+    const iS = tu.findIndex((v, i) => t[i] > tRet && v < T_SOLIDO);
+    const tSolid = iS >= 0 ? t[iS] - tRet : null;
+    const msgs = []; let color = "ok";
+    if (tFunde === null) { msgs.push("NO FUNDE: el estaño\nno moja la unión"); color = "mal"; }
+    else {
+      if (tFunde > 3) { msgs.push(`Calentamiento lento (${num(tFunde, 1, "s")} > 3 s)`); color = "aviso"; }
+      if (tEnMov > T_SOLIDO) { msgs.push("SOLDADURA FRÍA: se movió\ncon el estaño aún fundido"); color = "mal"; }
+    }
+    if (pieza.startsWith("Pin") && tMax > T_DANO) { msgs.push("Calor excesivo: puede\ndañar el componente"); color = "mal"; }
+    if (!msgs.length) msgs.push("Soldadura correcta:\nbrillante y resistente");
+    // en el Python los saltos de línea dentro de cada mensaje solo servían para que cupiera en el panel
+    const aviso = msgs.slice(0, 2).map((m) => m.replace(/\n/g, " ")).join("\n");
+    const punta = limpia ? "limpia" : "SUCIA (óxido)";
+    const salida = `Soldador de ${num(pot, 0, "W")} · punta ${punta}\n` +
+      `Alicates: ${alicates ? "sí (roban calor)" : "no"}\n\n` +
+      `Funde a los: ${tFunde !== null ? num(tFunde, 1, "s") : "no llega"}\n` +
+      `Temperatura máxima de la unión: ${num(tMax, 0, "°C")}\n` +
+      `Al retirar, solidifica en: ${tSolid !== null && tFunde !== null ? num(tSolid, 1, "s") : "—"}\n` +
+      `Al mover la pieza, la unión está a ${num(tEnMov, 0, "°C")}`;
+    return { t, tp, tu, tm, tFunde, aviso, doble: msgs.length > 1, color, salida };
+  }
+  /* calc:fin */
+
+  const AMBAR = "#C77C00";
+  const st = { pot: 30, tRet: 4, tMov: 3, pieza: NOMBRES[0], limpia: true, alicates: false };
+  let A = null;
+
+  const lienzo = new Sim.Lienzo("#grafica", {
+    proporcion: 0.62, altoMin: 320, etiqueta: "Temperatura de la punta y de la unión frente al tiempo",
+    dibujar(ctx, w, h, L) {
+      const ej = new Sim.Ejes(L, ctx, { xlim: [0, T_FIN], ylim: [0, 450], xlabel: "Tiempo (s)", ylabel: "Temperatura (°C)" });
+      ej.marco();
+      ej.area([0, T_FIN], [T_FUNDE, T_FUNDE], T_SOLIDO, { color: C.GOLD, alfa: 0.30 });
+      ej.texto(T_FIN - 0.15, T_FUNDE + 7, "funde el estaño (≈ 183–200 °C)", { tam: 13, alin: "right", color: C.INK });
+      ej.hline(T_DANO, { color: C.RED, guion: "punto", ancho: 1.5 });
+      ej.texto(0.15, T_DANO + 6, "riesgo para el componente (> 350 °C)", { tam: 12.5, color: C.RED });
+      ej.linea(A.t, A.tp, { color: C.MUTED, ancho: 1.8, guion: true });
+      ej.linea(A.t, A.tu, { color: C.NAVY, ancho: 3 });
+      ej.vline(st.tRet, { color: C.INK, ancho: 1.2 });
+      ej.vline(A.tm, { color: C.RED, ancho: 1.2, guion: true });
+      const rotulo = (x, y, s, color) => { const dcha = x > T_FIN * 0.75; ej.texto(x + (dcha ? -0.08 : 0.08), y, s, { tam: 12.5, color, alin: dcha ? "right" : "left", fondo: "rgba(255,255,255,0.8)", pad: 2 }); };
+      rotulo(st.tRet, 425, "retiras el soldador", C.INK);
+      rotulo(A.tm, 400, "mueves la pieza", C.RED);
+      if (A.tFunde !== null) ej.punto(A.tFunde, T_FUNDE, { radio: 8 });
+      ej.leyenda([{ texto: "Punta del soldador", color: C.MUTED, guion: true, ancho: 1.8 }, { texto: "Unión (pieza)", color: C.NAVY, ancho: 3 }], "abajo-der");
+    },
+  });
+
+  const salida = document.getElementById("salida"), aviso = document.getElementById("aviso");
+  const COLOR = { ok: C.GREEN, aviso: AMBAR, mal: C.RED };
+  function actualizar() {
+    A = analizar(st.pot, st.tRet, st.tMov, st.pieza, st.limpia, st.alicates);
+    salida.textContent = A.salida;
+    aviso.textContent = A.aviso;
+    aviso.style.color = COLOR[A.color];
+    aviso.classList.toggle("doble", A.doble);
+    lienzo.pedir();
+  }
+
+  Sim.deslizador("#mandos", { etiqueta: "Potencia", min: 15, max: 60, valor: 30, paso: 5, unidad: "W", dec: 0, alCambiar: (v) => { st.pot = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "Soldador aplicado", min: 1, max: 10, valor: 4, paso: 0.5, unidad: "s", dec: 1, alCambiar: (v) => { st.tRet = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "Mover la pieza a", min: 0, max: 6, valor: 3, paso: 0.5, unidad: "s", dec: 1, alCambiar: (v) => { st.tMov = v; actualizar(); } });
+  document.getElementById("mandos").append(Sim.el("p", { class: "nota-ref", text: "(segundos después de retirar el soldador)" }));
+  Sim.opciones("#mandos2", { titulo: "Pieza que se suelda", etiquetas: NOMBRES, activa: 0, alCambiar: (i, t) => { st.pieza = t; actualizar(); } });
+  Sim.casillas("#mandos2", { titulo: "Condiciones", etiquetas: ["Punta limpia", "Con alicates"], marcadas: [true, false],
+    alCambiar: (i, v) => { if (i === 0) st.limpia = v; else st.alicates = v; actualizar(); } });
+  actualizar();
+})();
+</script>
+</body>
+</html>

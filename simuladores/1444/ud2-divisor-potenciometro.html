@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Mueve el cursor del potenciómetro, pon o quita la carga, y mira la tensión y la corriente de salida.">
+<title>Divisor de tensión con potenciómetro · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .reparto { display: flex; height: 34px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--white); font-weight: 700; }
+  .reparto > div { display: flex; align-items: center; justify-content: center; white-space: nowrap; overflow: hidden; min-width: 0; }
+  .reparto .rc { background: var(--gold); color: var(--navy); }
+  .reparto .rb { background: var(--green); color: var(--white); }
+  .reparto .rv { flex: 1; color: var(--navy); font-weight: 400; padding: 0 8px; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Divisor de tensión con potenciómetro</h1>
+    <p class="sub">UD2 · CE c · i · j · dimmer de la iluminación</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div id="grafica"></div>
+      <div class="tarjeta">
+        <h2>Reparto de la corriente en C (divisor de intensidad)</h2>
+        <div class="reparto" id="reparto"></div>
+      </div>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Mandos</h2><div class="controles" id="mandos"></div></div>
+      <div class="panel"><h2>Resultados</h2><div class="salida" id="salida"></div><span id="estado" hidden></span></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Un potenciómetro entre A (positivo) y B (masa) alimenta una carga (las lámparas del panel) desde su cursor C. Mueve el cursor, cambia la carga o quítala y observa: la tensión de salida sin carga (recta) y con carga (curva), cómo se reparte la corriente en el punto C (divisor de intensidad) y qué tramo del potenciómetro se calienta.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Pregunta para el alumnado</h2>
+      <ul>
+        <li>¿Por qué con carga la salida es menor?</li>
+        <li>¿Por qué rama pasa más corriente en C?</li>
+        <li>¿Qué pasa si la carga tiene mucha más resistencia que el potenciómetro?</li>
+      </ul>
+      <p class="nota-ref">La potencia máxima del potenciómetro (0,5 W) es un valor de referencia, no está en los apuntes.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  // ── CÁLCULO
+  const PMAX = 0.5; // W, potencia máxima del potenciómetro (valor de referencia)
+  /** k: posición del cursor de B (0) a A (1). Devuelve tensiones, corrientes y potencias. */
+  function calcular(e, rp, rl, k, conCarga = true) {
+    const rcb = k * rp, rac = (1 - k) * rp;
+    let rx;
+    if (conCarga) rx = rcb === 0 ? 0.0 : rcb * rl / (rcb + rl);
+    else rx = rcb;
+    const rt = rac + rx;
+    const i = rt > 0 ? e / rt : Infinity;
+    const vout = rac === 0 ? e : i * rx;
+    const il = conCarga ? vout / rl : 0.0;
+    const icb = rcb > 0 ? vout / rcb : (Number.isFinite(i) ? i : 0.0);
+    return {
+      vout, i, il, icb, pac: Number.isFinite(i) ? i * i * rac : 0.0,
+      pcb: icb * icb * rcb, pl: vout * il, rcb, rac,
+    };
+  }
+  // ── FIN CÁLCULO
+
+  let E = 28, RP = 1000, RL = 220, K = 50, carga = true;
+  const kk = Sim.linspace(0, 1, 301);
+
+  const lienzo = new Sim.Lienzo("#grafica", {
+    proporcion: 0.62, altoMin: 300, etiqueta: "Tensión en la carga frente a la posición del cursor",
+    dibujar(ctx, w, h, L) {
+      const ej = new Sim.Ejes(L, ctx, {
+        xlim: [0, 100], ylim: [0, 31], xlabel: "Posición del cursor C (de B = 0 % a A = 100 %)", ylabel: "Tensión en la carga (V)",
+      });
+      ej.marco();
+      const xs = kk.map((x) => x * 100);
+      ej.linea(xs, kk.map((x) => x * E), { color: C.BLUE, ancho: 2, guion: true });
+      ej.linea(xs, kk.map((x) => calcular(E, RP, RL, x, true).vout), { color: C.NAVY, ancho: 2.8, alfa: carga ? 1 : 0.35 });
+      ej.punto(K, calcular(E, RP, RL, K / 100, carga).vout, { radio: 9 });
+      ej.leyenda([
+        { texto: "Sin carga: V = E · R_CB / R_AB", color: C.BLUE, guion: true, ancho: 2 },
+        { texto: "Con la carga conectada", color: C.NAVY, ancho: 2.8 },
+      ], "arriba-izq");
+    },
+  });
+
+  const salida = document.getElementById("salida");
+  const est = document.getElementById("estado");
+  const reparto = document.getElementById("reparto");
+  let bCarga;
+  function actualizar() {
+    const k = K / 100;
+    const r = calcular(E, RP, RL, k, carga);
+    const caliente = r.pac > PMAX || r.pcb > PMAX;
+    const lin = [`R_AC = ${num(r.rac, 0, "Ω")}   ·   R_CB = ${num(r.rcb, 0, "Ω")}`,
+      `Salida sin carga: ${num(E * k, 2, "V")}`,
+      `Salida ${carga ? "con carga" : "(carga quitada)"}: ${num(r.vout, 2, "V")}`, "",
+      `I total (tramo A–C) = ${num(r.i * 1000, 1, "mA")}`];
+    if (carga) lin.push(`   por la carga:  ${num(r.il * 1000, 1, "mA")}`, `   por el tramo C–B:  ${num(r.icb * 1000, 1, "mA")}`);
+    lin.push("", `Calor en A–C: ${num(r.pac, 2, "W")}   ·   en C–B: ${num(r.pcb, 2, "W")}`);
+    salida.textContent = lin.join("\n");
+    salida.style.color = caliente ? C.RED : C.NAVY;
+    est.hidden = !caliente;
+    if (caliente) Sim.estado(est, `¡Supera los ${num(PMAX, 1, "W")} del potenciómetro: se calienta!`, "mal");
+    // Barra del reparto de la corriente en C
+    const it = r.il + r.icb;
+    reparto.replaceChildren();
+    if (carga && it > 0) {
+      const f = r.il / it;
+      const a = Sim.el("div", { class: "rc", style: `flex: 0 0 ${100 * f}%` }, f > 0.12 ? `carga ${num(100 * f, 0, "%")}` : "");
+      const b = Sim.el("div", { class: "rb", style: `flex: 0 0 ${100 * (1 - f)}%` }, f < 0.88 ? `C–B ${num(100 * (1 - f), 0, "%")}` : "");
+      reparto.append(a, b);
+    } else reparto.append(Sim.el("div", { class: "rv" }, "Sin carga: toda la corriente sigue por C–B"));
+    lienzo.pedir();
+  }
+
+  Sim.deslizador("#mandos", { etiqueta: "Tensión E", min: 12, max: 30, valor: E, paso: 0.5, unidad: "V", dec: 1, alCambiar: (v) => { E = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "Potenciómetro R_AB", min: 100, max: 5000, valor: RP, paso: 100, unidad: "Ω", dec: 0, alCambiar: (v) => { RP = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "Carga R_L", min: 10, max: 5000, valor: RL, paso: 10, unidad: "Ω", dec: 0, alCambiar: (v) => { RL = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "Cursor C", min: 0, max: 100, valor: K, paso: 1, unidad: "%", dec: 0, alCambiar: (v) => { K = v; actualizar(); } });
+  bCarga = Sim.boton("#mandos", "Quitar la carga", () => {
+    carga = !carga;
+    bCarga.textContent = carga ? "Quitar la carga" : "Poner la carga";
+    actualizar();
+  });
+  actualizar();
+})();
+</script>
+<script>/*PRUEBA*/(()=>{const h=new URLSearchParams(location.hash.slice(1));for(const a of (h.get('a')||'').split(';').filter(Boolean)){const [sel,val]=a.split('=');const el=document.querySelectorAll('input,button')[+sel];if(val!==undefined&&el.type==='range'){el.value=val;el.dispatchEvent(new Event('input'));}else el.click();}})();</script>
+</body>
+</html>

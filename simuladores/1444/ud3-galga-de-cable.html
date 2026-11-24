@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Cambia la corriente, la longitud y la caída admisible, y elige la galga AWG que necesita el cable.">
+<title>Elección de la galga de un cable · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .leyenda { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; margin: 0; font-size: .95rem; }
+  .leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+  .leyenda i { display: inline-block; width: 16px; height: 16px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Elección de la galga de un cable</h1>
+    <p class="sub">UD3 · CE d · barra de 28 V CC</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <p class="leyenda">
+        <span><i style="background:#2E8B57"></i>Cumple</span>
+        <span><i style="background:#E67E22"></i>Caída excesiva</span>
+        <span><i style="background:#C0392B"></i>Intensidad excesiva</span>
+      </p>
+      <div id="grafica"></div>
+      <div class="tarjeta"><h2>Carga y tramo</h2><div class="controles" id="mandos"></div></div>
+      <p class="nota-ref">Datos de referencia: secciones AWG, ρ del cobre = 0,0172 Ω·mm²/m e intensidad orientativa en mazo. Manda el manual del avión.</p>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Galga y retorno</h2><div class="controles" id="mandos2"></div></div>
+      <div class="panel"><h2>Galga elegida</h2><div class="salida" id="salida"></div><span id="estado"></span></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Mueve la intensidad de la carga, la longitud del tramo y la caída de tensión admisible, y elige una galga. Las barras muestran la caída de tensión que tendría cada galga: verde si cumple, naranja si la caída es excesiva y rojo si además la intensidad supera la orientativa del cable en un mazo. El borde azul marca la galga elegida.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Preguntas para el alumnado</h2>
+      <ul>
+        <li>Si la carga está el doble de lejos, ¿qué le pasa a la caída?</li>
+        <li>¿Por qué el retorno por la estructura permite un cable más fino?</li>
+        <li>¿Basta con mirar la intensidad máxima del cable?</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Datos de referencia</h2>
+      <p class="nota-ref">No están en los apuntes de la UD3; mandan siempre el manual del avión y el WDM.</p>
+      <ul class="nota-ref">
+        <li>Secciones nominales AWG (24: 0,205 mm² … 10: 5,26 mm²). Los apuntes de la UD1 citan 0,6 mm² para un cable de calibre 20 de un fabricante concreto; la sección real varía algo según el fabricante.</li>
+        <li>Resistividad del cobre: 0,0172 Ω·mm²/m a 20 °C (la misma que en los ejercicios de la UD1).</li>
+        <li>Intensidad máxima orientativa de cada galga dentro de un mazo (valores conservadores habituales).</li>
+        <li>Caída admisible en 28 V CC: 1 V en servicio continuo (FAA AC 43.13-1B, cap. 11), valor por defecto del deslizador.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  /* calc:inicio */
+  const RHO = 0.0172; // Ω·mm²/m, cobre a 20 °C (dato de referencia)
+  const GALGAS = [24, 22, 20, 18, 16, 14, 12, 10];
+  const SECCION = { 24: 0.205, 22: 0.326, 20: 0.519, 18: 0.823, 16: 1.31, 14: 2.08, 12: 3.31, 10: 5.26 }; // mm² (AWG nominal)
+  const IMAX = { 24: 3, 22: 5, 20: 7.5, 18: 10, 16: 13, 14: 17, 12: 23, 10: 33 }; // A, orientativa en mazo
+  const V_BARRA = 28.0;
+
+  function calcular(galga, i, tramo, retornoEstructura, adm) {
+    const L = retornoEstructura ? tramo : 2 * tramo; // metros de cable que recorre la corriente
+    const R = RHO * L / SECCION[galga];
+    const dV = i * R;
+    return { L, R, dV, pct: 100 * dV / V_BARRA, Vcarga: V_BARRA - dV, P: i * i * R, ok_i: i <= IMAX[galga], ok_v: dV <= adm };
+  }
+  function galgaMinima(i, tramo, retorno, adm) {
+    for (const g of GALGAS) { const c = calcular(g, i, tramo, retorno, adm); if (c.ok_i && c.ok_v) return g; }
+    return null;
+  }
+  function informe(gSel, i, tramo, retorno, adm) {
+    const c = calcular(gSel, i, tramo, retorno, adm);
+    const gmin = galgaMinima(i, tramo, retorno, adm);
+    const salida = `AWG ${gSel} · S = ${num(SECCION[gSel], 3, "mm²")}\n` +
+      `Cable recorrido: ${num(c.L, 1, "m")}\n` +
+      `R = ρ·L / S = ${num(c.R, 3, "Ω")}\n` +
+      `Caída ΔV = I·R = ${num(c.dV, 2, "V")} (${num(c.pct, 1)} %)\n` +
+      `Tensión en la carga: ${num(c.Vcarga, 2, "V")}\n` +
+      `Calor en el cable: I²·R = ${num(c.P, 1, "W")}\n` +
+      `I orientativa en mazo: ${num(IMAX[gSel], 1, "A")}\n` +
+      `Galga mínima que cumple: ${gmin ? "AWG " + gmin : "ninguna"}`;
+    let veredicto, tipo;
+    if (!c.ok_i) { veredicto = "NO: el cable se calienta de más"; tipo = "mal"; }
+    else if (!c.ok_v) { veredicto = "NO: caída de tensión excesiva"; tipo = "aviso"; }
+    else { veredicto = "SÍ cumple"; tipo = "ok"; }
+    return { salida, veredicto, tipo };
+  }
+  /* calc:fin */
+
+  let I = 9, TRAMO = 10, ADM = 1.0, RETORNO = true, GSEL = 16;
+
+  const lienzo = new Sim.Lienzo("#grafica", {
+    proporcion: 0.62, altoMin: 320, etiqueta: "Caída de tensión de cada galga",
+    dibujar(ctx, w, h, L) {
+      const estrecho = w < 560;
+      const tope = Math.max(3 * ADM, 1.0);
+      const ej = new Sim.Ejes(L, ctx, {
+        xlim: [-0.6, GALGAS.length - 0.4], ylim: [0, tope * 1.08], ylabel: "Caída de tensión en el cable (V)",
+        xticks: GALGAS.map((_, k) => k), fmtx: (k) => (estrecho ? "AWG\n" : "AWG ") + GALGAS[Math.round(k)], fmty: (v) => num(v, 1),
+        margen: { aba: estrecho ? 46 : 34, izq: 64 }, tam: estrecho ? 12 : 13,
+      });
+      ej.marco();
+      GALGAS.forEach((g, k) => {
+        const c = calcular(g, I, TRAMO, RETORNO, ADM);
+        const alto = Math.min(c.dV, tope);
+        const col = c.ok_v && c.ok_i ? C.GREEN : (!c.ok_i ? C.RED : C.ORANGE);
+        ej.barras([k], [alto], 0.68, { color: col });
+        if (g === GSEL) {
+          const x0 = ej.px(k - 0.34), x1 = ej.px(k + 0.34), y0 = ej.py(0), y1 = ej.py(alto);
+          ctx.save(); ctx.strokeStyle = C.NAVY; ctx.lineWidth = 4; ctx.strokeRect(x0, y1, x1 - x0, y0 - y1); ctx.restore();
+        }
+        Sim.texto(ctx, (c.dV > tope ? "↑ " : "") + num(c.dV, 2), ej.px(k), ej.py(alto) - (g === GSEL ? 5 : 2), { tam: estrecho ? 11 : 12.5, alin: "center", base: "bottom", color: C.INK });
+      });
+      ej.hline(ADM, { color: C.RED, guion: true, ancho: 2 });
+      Sim.texto(ctx, `Límite ${num(ADM, 2, "V")}`, ej.x0 + ej.ancho - 4, ej.py(ADM) - 4, { tam: 13, alin: "right", color: C.RED, fondo: "rgba(255,255,255,0.8)", pad: 2 });
+    },
+  });
+
+  const salida = document.getElementById("salida");
+  function actualizar() {
+    const inf = informe(GSEL, I, TRAMO, RETORNO, ADM);
+    salida.textContent = inf.salida;
+    Sim.estado("#estado", inf.veredicto, inf.tipo);
+    lienzo.pedir();
+  }
+
+  Sim.deslizador("#mandos", { etiqueta: "Intensidad", min: 0.5, max: 30, valor: I, paso: 0.5, unidad: "A", dec: 1, alCambiar: (v) => { I = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "Tramo", min: 1, max: 30, valor: TRAMO, paso: 0.5, unidad: "m", dec: 1, alCambiar: (v) => { TRAMO = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "Caída admisible", min: 0.25, max: 2.0, valor: ADM, paso: 0.05, unidad: "V", dec: 2, alCambiar: (v) => { ADM = v; actualizar(); } });
+  Sim.opciones("#mandos2", { titulo: "Galga", etiquetas: GALGAS.map((g) => "AWG " + g), activa: 4, alCambiar: (i) => { GSEL = GALGAS[i]; actualizar(); } });
+  Sim.opciones("#mandos2", { titulo: "Retorno de la corriente", etiquetas: ["Retorno por la estructura (masa)", "Cable de ida y de vuelta"], activa: 0,
+    alCambiar: (i) => { RETORNO = i === 0; actualizar(); } });
+  actualizar();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Arrastra componentes, monta circuitos de CC y CA, mide con el polímetro y supera los 12 retos del taller.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<title>Taller de circuitos UD2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="ud2-taller-de-circuitos.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><h1>Taller de circuitos</h1><span class="plate">Módulo 1444 · UD2</span></div>
+  <nav class="tabs" aria-label="Modo">
+    <button id="tabLibre" aria-pressed="true">Taller libre</button>
+    <button id="tabRetos" aria-pressed="false">Retos <small id="progTab"></small></button>
+    <button id="btnHelp" aria-pressed="false">Cómo se monta</button>
+  </nav>
+</header>
+<main class="app">
+  <aside class="palette" aria-label="Componentes">
+    <h2>Componentes</h2>
+    <p class="hintp">Arrástralos a la lámina (o tócalos para añadirlos). Todos los de la UD2.</p>
+    <div class="groups" id="pal"></div>
+  </aside>
+  <section class="stage">
+    <svg id="board" xmlns="http://www.w3.org/2000/svg" aria-label="Lámina del circuito">
+      <defs>
+        <pattern id="gridp" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0 H0 V20" style="fill:none;stroke:var(--grid);stroke-width:1"/></pattern>
+        <pattern id="gridP" width="100" height="100" patternUnits="userSpaceOnUse"><rect width="100" height="100" fill="url(#gridp)"/><path d="M100 0 H0 V100" style="fill:none;stroke:var(--grid2);stroke-width:1"/></pattern>
+      </defs>
+      <g id="world">
+        <rect id="bg" x="-4000" y="-4000" width="8000" height="8000" fill="url(#gridP)"/>
+        <g id="wires"></g><g id="jdots"></g><g id="comps"></g><g id="over"></g>
+      </g>
+    </svg>
+    <div class="tools" id="tools">
+      <button id="bRun" class="on" title="Pausar o reanudar la simulación">Simulación en marcha</button>
+      <button id="bUndo" title="Deshacer (Ctrl+Z)">Deshacer</button>
+      <button id="bRot" title="Girar la pieza seleccionada (R)">Girar</button>
+      <button id="bDup" title="Duplicar la pieza seleccionada">Duplicar</button>
+      <button id="bDel" title="Borrar la selección (Supr)">Borrar</button>
+      <span class="sep"></span>
+      <button id="bZo" title="Alejar">−</button><button id="bZi" title="Acercar">+</button><button id="bFit" title="Encajar el circuito">Encajar</button>
+      <span class="sep"></span>
+      <button id="bFix" title="Rearma disyuntores y cambia fusibles y piezas quemadas">Reparar todo</button>
+      <button id="bClear" title="Vaciar la lámina">Vaciar</button>
+      <button id="bSnd" title="Sonido de la bocina y del pitido de continuidad">Sonido: sí</button>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+  </section>
+  <aside class="side" id="side"></aside>
+</main>
+<div class="modal" id="help" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="helpT">
+    <h2 id="helpT">Cómo se monta</h2>
+    <ul>
+      <li><b>Piezas:</b> arrastra un componente desde la caja de la izquierda a la lámina. Si lo tocas sin arrastrar, aparece en el centro.</li>
+      <li><b>Cables:</b> pulsa en un terminal (el circulito al final de cada pieza) y suelta sobre otro terminal. A un terminal pueden llegar varios cables. Dos terminales que coinciden en el mismo punto también quedan unidos.</li>
+      <li><b>Mover y girar:</b> arrastra la pieza; con la pieza seleccionada, <kbd>R</kbd> o «Girar». <kbd>Supr</kbd> borra. Doble clic en un cable cambia por dónde dobla.</li>
+      <li><b>Accionar:</b> toca un interruptor, conmutador o conector para cambiarlo; mantén pulsado un pulsador. Un disyuntor saltado se rearma tocándolo; un fusible fundido se cambia igual.</li>
+      <li><b>Ajustar:</b> en el inspector (a la derecha) eliges el valor de cada pieza: tensión de la batería, resistencia, calibre del disyuntor, función del polímetro…</li>
+      <li><b>Masa:</b> todas las masas están unidas por la estructura del avión. El retorno de la corriente puede ir por masa.</li>
+      <li><b>Lo que verás:</b> el color del cable indica la tensión (azul, 0 V; naranja, más tensión) y los trazos que se mueven, la corriente. Las lámparas lucen según su potencia y los aparatos de medida dan su lectura.</li>
+      <li><b>Cuidado:</b> como en el taller, un amperímetro en paralelo o una lámpara a más tensión de la nominal se estropean. El óhmetro se usa sin tensión.</li>
+    </ul>
+    <div class="row"><button class="btn" id="helpClose">Entendido</button></div>
+  </div>
+</div>
+
+<script>
+// @@MOTOR-INICIO
+/* ===== Componentes y motor de simulación (análisis nodal en el tiempo, como en un simulador de circuitos) =====
+   Cada componente se convierte en primitivas: resistencias, fuentes con resistencia interna, condensadores,
+   bobinas, bobinas acopladas (transformador) y diodos por tramos. Se resuelve G·V = I en cada paso de tiempo. */
+const RON = 1e-3, ROFF = 1e9, GMIN = 1e-9, NB = " ";
+
+const fmtN = (x, d = 2) => {
+  if (!isFinite(x)) return "—";
+  const a = Math.abs(x);
+  let s = a >= 100 ? x.toFixed(0) : a >= 10 ? x.toFixed(Math.max(0, d - 1)) : x.toFixed(d);
+  return s.replace(".", ",");
+};
+function siFmt(x, unit, d = 2) {
+  const a = Math.abs(x);
+  if (!isFinite(x)) return "—";
+  if (a === 0) return "0" + NB + unit;
+  const pre = [[1e6, "M"], [1e3, "k"], [1, ""], [1e-3, "m"], [1e-6, "µ"], [1e-9, "n"]];
+  for (const [f, p] of pre) if (a >= f * 0.9995) return fmtN(x / f, d) + NB + p + unit;
+  return fmtN(x / 1e-9, d) + NB + "n" + unit;
+}
+
+/* --- opciones de cada parámetro --- */
+const O = {
+  bat: [["6", "6 V"], ["12", "12 V"], ["24", "24 V (20 elementos Ni-Cd)"]],
+  pila: [["1.2", "1,2 V (Ni-Cd)"], ["1.5", "1,5 V (pila seca)"], ["2", "2 V (plomo-ácido)"]],
+  gen: [["cc28", "CC 28,5 V (generador del avión)"], ["ca115", "CA 115 V 400 Hz (alternador)"], ["ca26", "CA 26 V 400 Hz"], ["ca230", "CA 230 V 50 Hz (red del taller)"]],
+  R: ["1", "2.2", "4.7", "10", "12", "22", "30", "47", "60", "100", "220", "470", "1000", "1200", "1500", "1800", "2200", "4700", "10000", "47000", "100000", "1000000"].map(v => [v, siFmt(+v, "Ω", 2).replace(",00", "").replace(",0" + NB, NB)]),
+  Pw: [["0.25", "0,25 W"], ["1", "1 W"], ["5", "5 W"], ["25", "25 W"]],
+  Rmax: [["10", "10 Ω"], ["100", "100 Ω"], ["1000", "1 kΩ"], ["10000", "10 kΩ"]],
+  Rpot: [["1000", "1 kΩ"], ["10000", "10 kΩ"], ["100000", "100 kΩ"]],
+  C: [["1e-6", "1 µF"], ["1e-5", "10 µF"], ["1e-4", "100 µF"], ["4.7e-4", "470 µF"], ["1e-3", "1000 µF"], ["4.7e-3", "4700 µF"]],
+  Cv: [["35", "35 V"], ["63", "63 V"], ["250", "250 V"]],
+  L: [["1e-3", "1 mH"], ["1e-2", "10 mH"], ["0.1", "100 mH"], ["1", "1 H"]],
+  led: [["rojo", "Rojo (1,8 V)"], ["verde", "Verde (2,1 V)"], ["ambar", "Ámbar (2 V)"]],
+  vz: [["5.1", "5,1 V"], ["12", "12 V"], ["24", "24 V"]],
+  fus: ["1", "2", "3", "5", "10", "15", "25"].map(v => [v, v + NB + "A"]),
+  cb: ["1", "2", "3", "5", "7.5", "10", "15", "20", "25", "35", "50"].map(v => [v, v.replace(".", ",") + NB + "A"]),
+  relV: [["28", "28 V CC (280 Ω)"], ["24", "24 V CC (240 Ω)"], ["12", "12 V CC (120 Ω)"]],
+  K: [["K1", "K1"], ["K2", "K2"], ["K3", "K3"], ["K4", "K4"]],
+  lamp: [["28-5", "28 V · 5 W (indicadora)"], ["28-10", "28 V · 10 W (lectura)"], ["28-25", "28 V · 25 W (navegación)"], ["28-250", "28 V · 250 W (aterrizaje)"],
+    ["24-10", "24 V · 10 W"], ["14-5", "14 V · 5 W"], ["26-5", "26 V · 5 W (instrumentos, CA)"], ["115-25", "115 V · 25 W (CA)"], ["6-1.2", "6 V · 1,2 W"]],
+  lampColor: [["blanca", "Blanca"], ["roja", "Roja"], ["verde", "Verde"]],
+  motor: [["28-200", "28 V · 200 W (bomba hidráulica)"], ["28-100", "28 V · 100 W (actuador)"], ["28-30", "28 V · 30 W (ventilador)"], ["24-50", "24 V · 50 W"]],
+  bocina: [["28-8", "28 V · 8 W (bocina de aviso)"], ["24-5", "24 V · 5 W"]],
+  trafo: [["115-26", "115 V / 26 V"], ["115-28", "115 V / 28 V"], ["230-24", "230 V / 24 V"], ["115-115", "1 : 1 (115 V / 115 V)"]],
+  bus: [["DC BUS", "DC BUS"], ["BAT BUS", "BAT BUS"], ["ESS BUS", "ESS BUS"], ["GEN BUS", "GEN BUS"]],
+  pm: [["vdc", "V ⎓ (tensión continua)"], ["vac", "V ~ (tensión alterna)"], ["adc", "A ⎓ (intensidad)"], ["ohm", "Ω (resistencia)"], ["cont", "Continuidad (pitido)"]],
+};
+const pv = (c, k) => c.p[k];
+const lampSpec = c => { const [v, p] = String(c.p.spec).split("-").map(Number); return { v, p, r: v * v / p }; };
+const motorSpec = lampSpec;
+const genSpec = c => ({ cc28: { ac: false, v: 28.5, f: 0, r: 0.02 }, ca115: { ac: true, v: 115, f: 400, r: 0.05 }, ca26: { ac: true, v: 26, f: 400, r: 0.02 }, ca230: { ac: true, v: 230, f: 50, r: 0.3 } })[c.p.tipo];
+const trafoSpec = c => { const [a, b] = String(c.p.rel).split("-").map(Number); return { vp: a, vs: b, n: b / a }; };
+
+/* --- dibujo (coordenadas locales; terminales en múltiplos de 20) --- */
+const ln = (x1, y1, x2, y2, c = "s") => `<line class="${c}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+const leads = (a, b) => ln(-40, 0, a, 0) + ln(b, 0, 40, 0);
+const arrow = (x, y, ang, s = 7) => { const a = ang * Math.PI / 180; const p1 = [x - s * Math.cos(a - 0.45), y - s * Math.sin(a - 0.45)], p2 = [x - s * Math.cos(a + 0.45), y - s * Math.sin(a + 0.45)]; return `<path class="fillink" d="M${x} ${y} L${p1[0].toFixed(1)} ${p1[1].toFixed(1)} L${p2[0].toFixed(1)} ${p2[1].toFixed(1)} Z"/>`; };
+const txt = (x, y, t, cls = "txt", anchor = "middle") => `<text class="${cls}" x="${x}" y="${y}" text-anchor="${anchor}">${t}</text>`;
+const circ = (letter, extra = "") => leads(-17, 17) + `<circle class="s bodyfill" cx="0" cy="0" r="17"/>` + extra + (letter ? txt(0, 6, letter, "txt big") : "");
+const dotP = (x, y) => `<circle class="fillink" cx="${x}" cy="${y}" r="3"/>`;
+const ring = (x, y) => `<circle class="s bodyfill" cx="${x}" cy="${y}" r="3"/>`;
+const H2 = [[-40, 0], [40, 0]];
+
+const CATS = [
+  ["fuente", "Fuentes"], ["pasivo", "Resistencias, condensadores y bobinas"], ["semi", "Diodos"], ["prot", "Protecciones"],
+  ["mando", "Mando y relés"], ["receptor", "Receptores"], ["medida", "Aparatos de medida"], ["conex", "Conexiones"],
+];
+
+const DEFS = {
+  bateria: {
+    n: "Batería", cat: "fuente", pre: "BAT", pins: H2, pinN: ["+", "−"],
+    d: "Acumulador que guarda energía química y la entrega en corriente continua. En el avión, de Ni-Cd o de plomo-ácido; varias en serie suman tensión y en paralelo, capacidad.",
+    params: [{ k: "v", l: "Tensión nominal", o: O.bat, def: "24" }],
+    draw: c => leads(-12, 12) + ln(-12, -18, -12, 18) + `<line class="s" x1="-4" y1="-9" x2="-4" y2="9" style="stroke-width:5"/>` + ln(4, -18, 4, 18) + `<line class="s" x1="12" y1="-9" x2="12" y2="9" style="stroke-width:5"/>` + txt(-22, -10, "+", "txt sm"),
+    prims: (c, P) => [{ k: "V", a: P(0), b: P(1), v: () => +c.p.v, r: 0.05, role: "main" }],
+    tick: shortCheck,
+  },
+  pila: {
+    n: "Pila o elemento", cat: "fuente", pre: "E", pins: H2, pinN: ["+", "−"],
+    d: "Un solo elemento o celda. Una batería de Ni-Cd de 24 V tiene 20 elementos de 1,2 V en serie.",
+    params: [{ k: "v", l: "Tensión", o: O.pila, def: "1.2" }],
+    draw: c => leads(-4, 4) + ln(-4, -18, -4, 18) + `<line class="s" x1="5" y1="-9" x2="5" y2="9" style="stroke-width:5"/>` + txt(-14, -10, "+", "txt sm"),
+    prims: (c, P) => [{ k: "V", a: P(0), b: P(1), v: () => +c.p.v, r: 0.01, role: "main" }],
+    tick: shortCheck,
+  },
+  generador: {
+    n: "Generador", cat: "fuente", pre: "G", pins: H2, pinN: ["+", "−"],
+    d: "Genera la energía eléctrica con el motor en marcha: el generador de CC da unos 28,5 V a la barra; el alternador, 115 V de alterna a 400 Hz.",
+    params: [{ k: "tipo", l: "Tipo", o: O.gen, def: "cc28" }],
+    draw: c => circ("G", txt(0, 26 + 4, genSpec(c).ac ? "~" : "=", "txt sm")) ,
+    prims: (c, P) => { const g = genSpec(c); return [{ k: "V", a: P(0), b: P(1), v: t => g.ac ? g.v * Math.SQRT2 * Math.sin(2 * Math.PI * g.f * t) : g.v, r: g.r, role: "main", ac: g.ac ? g.f : 0 }]; },
+    tick: shortCheck,
+  },
+  tr: {
+    n: "TR (transformador-rectificador)", cat: "fuente", pre: "TR",
+    pins: [[-40, -20], [-40, 20], [40, -20], [40, 20]], pinN: ["~", "~", "+", "−"],
+    d: "Convierte la alterna de 115 V del alternador en 28 V de continua para la barra de CC. Sin alterna en su entrada no da nada: con CC o sin alternador, el TR no funciona.",
+    params: [],
+    draw: c => `<rect class="s bodyfill" x="-28" y="-32" width="56" height="64"/>` + ln(-40, -20, -28, -20) + ln(-40, 20, -28, 20) + ln(28, -20, 40, -20) + ln(28, 20, 40, 20) + ln(-28, 32, 28, -32) + txt(-12, -12, "~", "txt") + txt(13, 22, "=", "txt") + txt(0, 5, "TR", "txt sm"),
+    prims: (c, P) => [{ k: "R", a: P(0), b: P(1), g: () => 1 / 300, role: "in" }, { k: "V", a: P(2), b: P(3), v: () => c.st.vout || 0, r: 0.03, role: "main" }],
+    tick: (c, sim) => { const p = sim.prim(c, "in"); const acr = Math.sqrt(Math.max(0, p.v2 - p.va * p.va)); c.st.vin = acr; const want = acr > 95 && acr < 135 ? 28 : 0; c.st.vout = (c.st.vout || 0) + (want - (c.st.vout || 0)) * 0.2; },
+  },
+  resistencia: {
+    n: "Resistencia", cat: "pasivo", pre: "R", pins: H2,
+    d: "Se opone al paso de la corriente (Ω). En serie, las resistencias se suman; en paralelo, la total es menor que la más pequeña. Si disipa más potencia de la que admite, se quema.",
+    params: [{ k: "R", l: "Valor", o: O.R, def: "100" }, { k: "pw", l: "Potencia máxima", o: O.Pw, def: "1" }],
+    draw: c => leads(-18, 18) + `<rect class="s bodyfill rbody" x="-18" y="-7" width="36" height="14"/>`,
+    prims: (c, P) => [{ k: "R", a: P(0), b: P(1), g: () => c.st.burnt ? 1 / ROFF : 1 / +c.p.R, role: "main" }],
+    tick: (c, sim, dt) => heat(c, sim.prim(c, "main").p, +c.p.pw, 2, dt, "La resistencia se ha quemado: disipaba más del doble de la potencia que admite."),
+  },
+  reostato: {
+    n: "Resistencia variable (reóstato)", cat: "pasivo", pre: "RV", pins: H2,
+    d: "Resistencia que se ajusta a mano: regula la corriente de un receptor, por ejemplo la intensidad de una luz.",
+    params: [{ k: "R", l: "Valor máximo", o: O.Rmax, def: "100" }, { k: "pos", l: "Posición del cursor", slider: true, def: 0.5 }],
+    draw: c => leads(-18, 18) + `<rect class="s bodyfill rbody" x="-18" y="-7" width="36" height="14"/>` + ln(-20, 14, 16, -12) + arrow(20, -15, -36),
+    prims: (c, P) => [{ k: "R", a: P(0), b: P(1), g: () => 1 / (+c.p.R * +c.p.pos + 0.1), role: "main" }],
+  },
+  potenciometro: {
+    n: "Potenciómetro", cat: "pasivo", pre: "P", pins: [[-40, 0], [40, 0], [0, -40]], pinN: ["1", "2", "cursor"],
+    d: "Resistencia con tres terminales: el cursor reparte la tensión entre los extremos (divisor de tensión).",
+    params: [{ k: "R", l: "Valor total", o: O.Rpot, def: "10000" }, { k: "pos", l: "Posición del cursor", slider: true, def: 0.5 }],
+    draw: c => leads(-18, 18) + `<rect class="s bodyfill rbody" x="-18" y="-7" width="36" height="14"/>` + ln(0, -40, 0, -12) + arrow(0, -8, 90),
+    prims: (c, P) => [{ k: "R", a: P(0), b: P(2), g: () => 1 / (+c.p.R * +c.p.pos + 0.05), role: "main" }, { k: "R", a: P(2), b: P(1), g: () => 1 / (+c.p.R * (1 - c.p.pos) + 0.05), role: "b" }],
+  },
+  condensador: {
+    n: "Condensador", cat: "pasivo", pre: "C", pins: H2,
+    d: "Almacena carga entre dos placas. En continua, una vez cargado, no deja pasar corriente; se carga y descarga con la constante de tiempo τ = R·C.",
+    params: [{ k: "C", l: "Capacidad", o: O.C, def: "1e-4" }, { k: "vmax", l: "Tensión máxima", o: O.Cv, def: "63" }],
+    draw: c => leads(-5, 5) + ln(-5, -16, -5, 16) + ln(5, -16, 5, 16),
+    prims: (c, P) => [{ k: "C", a: P(0), b: P(1), C: +c.p.C, role: "main", open: () => c.st.burnt }],
+    tick: (c, sim, dt) => overV(c, sim.prim(c, "main").vab, +c.p.vmax, false, dt),
+  },
+  electrolitico: {
+    n: "Condensador electrolítico", cat: "pasivo", pre: "C", pins: H2, pinN: ["+", "−"],
+    d: "Condensador de mucha capacidad con polaridad: el terminal + va hacia el positivo. Conectado al revés, se estropea.",
+    params: [{ k: "C", l: "Capacidad", o: O.C, def: "1e-3" }, { k: "vmax", l: "Tensión máxima", o: O.Cv, def: "35" }],
+    draw: c => leads(-6, 5) + `<rect class="s bodyfill" x="-10" y="-15" width="4" height="30"/>` + `<rect class="fillink" x="5" y="-15" width="5" height="30"/>` + txt(-17, -12, "+", "txt sm"),
+    prims: (c, P) => [{ k: "C", a: P(0), b: P(1), C: +c.p.C, role: "main", open: () => c.st.burnt }],
+    tick: (c, sim, dt) => overV(c, sim.prim(c, "main").vab, +c.p.vmax, true, dt),
+  },
+  bobina: {
+    n: "Bobina (inductancia)", cat: "pasivo", pre: "BOB", pins: H2,
+    d: "Hilo enrollado que crea un campo magnético. Se opone a los cambios de corriente: al abrir su circuito da un pico de tensión.",
+    params: [{ k: "L", l: "Inductancia", o: O.L, def: "0.1" }],
+    draw: c => leads(-24, 24) + `<path class="s" d="M-24 0 a6 6 0 0 1 12 0 a6 6 0 0 1 12 0 a6 6 0 0 1 12 0 a6 6 0 0 1 12 0"/>`,
+    prims: (c, P, X) => { const m = X(); return [{ k: "R", a: P(0), b: m, g: () => 1, role: "rw" }, { k: "L", a: m, b: P(1), L: +c.p.L, role: "main" }]; },
+  },
+  diodo: {
+    n: "Diodo", cat: "semi", pre: "D", pins: H2, pinN: ["ánodo", "cátodo"],
+    d: "Deja pasar la corriente en un solo sentido (de ánodo a cátodo) con una caída de unos 0,7 V. Es la base de los rectificadores.",
+    params: [],
+    draw: c => leads(-10, 9) + `<path class="fillink" d="M-10 -11 L-10 11 L9 0 Z"/>` + ln(9, -12, 9, 12),
+    prims: (c, P) => [{ k: "D", a: P(0), b: P(1), vf: 0.7, ron: 0.05, vz: Infinity, role: "main", open: () => c.st.burnt }],
+    tick: (c, sim, dt) => heat(c, Math.abs(sim.prim(c, "main").ia), 1, 1, dt, "El diodo se ha quemado: pasaba más de 1 A."),
+  },
+  led: {
+    n: "Diodo LED", cat: "semi", pre: "LED", pins: H2, pinN: ["ánodo", "cátodo"],
+    d: "Diodo que emite luz. Necesita una resistencia en serie que limite su corriente a unos 10–20 mA; con más se quema, y al revés no luce.",
+    params: [{ k: "col", l: "Color", o: O.led, def: "verde" }],
+    draw: c => leads(-10, 9) + `<path class="fillink ledbody" d="M-10 -11 L-10 11 L9 0 Z"/>` + ln(9, -12, 9, 12) + ln(2, -15, 12, -25) + arrow(14, -27, -45) + ln(10, -11, 20, -21) + arrow(22, -23, -45),
+    prims: (c, P) => [{ k: "D", a: P(0), b: P(1), vf: { rojo: 1.8, verde: 2.1, ambar: 2.0 }[c.p.col], ron: 8, vz: 5, role: "main", open: () => c.st.burnt }],
+    tick: (c, sim, dt) => { const p = sim.prim(c, "main"); heat(c, Math.abs(p.ia), 0.03, 1, dt, "El LED se ha quemado: le llegaban más de 30 mA. Ponle una resistencia en serie."); if (!c.st.burnt && p.va < -4.9) { c.st.rv = (c.st.rv || 0) + dt; if (c.st.rv > 0.2) { c.st.burnt = true; EVENTS.push({ c, msg: "El LED se ha estropeado: estaba conectado al revés con más de 5 V de tensión inversa." }); } } else c.st.rv = 0; },
+  },
+  zener: {
+    n: "Diodo Zener", cat: "semi", pre: "DZ", pins: H2, pinN: ["ánodo", "cátodo"],
+    d: "Diodo que, conectado en inverso, mantiene fija su tensión (tensión Zener). Se usa para estabilizar tensiones.",
+    params: [{ k: "vz", l: "Tensión Zener", o: O.vz, def: "12" }],
+    draw: c => leads(-10, 9) + `<path class="fillink" d="M-10 -11 L-10 11 L9 0 Z"/>` + `<path class="s" d="M4 -15 L9 -12 L9 12 L14 15"/>`,
+    prims: (c, P) => [{ k: "D", a: P(0), b: P(1), vf: 0.7, ron: 0.5, vz: +c.p.vz, role: "main", open: () => c.st.burnt }],
+    tick: (c, sim, dt) => { const p = sim.prim(c, "main"); heat(c, Math.abs(p.p), 1, 1, dt, "El Zener se ha quemado: disipaba más de 1 W."); },
+  },
+  fusible: {
+    n: "Fusible", cat: "prot", pre: "F", pins: H2, click: true,
+    d: "Protege el circuito: su hilo se funde si pasa más corriente de la nominal. Hay que sustituirlo por otro del mismo calibre.",
+    params: [{ k: "In", l: "Intensidad nominal", o: O.fus, def: "5" }],
+    draw: c => ln(-40, 0, -18, 0) + ln(18, 0, 40, 0) + `<rect class="s bodyfill" x="-18" y="-7" width="36" height="14"/>` + (c.st.burnt ? ln(-18, 0, -5, 0) + ln(5, 0, 18, 0) + ln(-5, 0, -1, -5, "s bad") : ln(-18, 0, 18, 0)),
+    prims: (c, P) => [{ k: "R", a: P(0), b: P(1), g: () => c.st.burnt ? 1 / ROFF : 1 / 0.01, role: "main" }],
+    tick: (c, sim, dt) => protect(c, sim.prim(c, "main").ia, +c.p.In, 0.02, 0, dt, "Fusible fundido: pasaba más corriente de la nominal."),
+  },
+  disyuntor: {
+    n: "Disyuntor (breaker)", cat: "prot", pre: "CB", pins: H2, click: true,
+    d: "Interruptor automático: salta con la sobrecarga (térmico) o con el cortocircuito (magnético). Se rearma a mano después de quitar la avería.",
+    params: [{ k: "In", l: "Intensidad nominal", o: O.cb, def: "5" }],
+    draw: c => leads(-16, 16) + ring(-16, 0) + ring(16, 0) + (c.st.burnt ? ln(-14, -2, 12, -16) + txt(0, 18, "saltado", "txt sm bad") : ln(-14, -2, 16, -2)) + `<path class="s" d="M-6 -6 a6 6 0 0 1 12 0"/>` + ln(0, -12, 0, -20) + `<rect class="fillink" x="-4" y="-25" width="8" height="5"/>`,
+    prims: (c, P) => [{ k: "R", a: P(0), b: P(1), g: () => c.st.burnt ? 1 / ROFF : 1 / 0.005, role: "main" }],
+    tick: (c, sim, dt) => protect(c, sim.prim(c, "main").ia, +c.p.In, 1.5, 10, dt, "Ha saltado el disyuntor por sobreintensidad."),
+  },
+  interruptor: {
+    n: "Interruptor", cat: "mando", pre: "S", pins: H2, click: true,
+    d: "Abre o cierra el circuito a mano. Se monta en serie con lo que manda.",
+    params: [], init: c => { c.st.on = false; },
+    draw: c => leads(-16, 16) + dotP(-16, 0) + ring(16, 0) + (c.st.on ? ln(-16, 0, 16, -3) : ln(-16, 0, 12, -16)),
+    prims: (c, P) => [{ k: "R", a: P(0), b: P(1), g: () => c.st.on ? 1 / 0.002 : 1 / ROFF, role: "main" }],
+  },
+  conmutador: {
+    n: "Conmutador", cat: "mando", pre: "S", pins: [[-40, 0], [40, -20], [40, 20]], pinN: ["común", "posición 1", "posición 2"], click: true,
+    d: "Interruptor de dos posiciones: lleva la corriente del común a una salida o a la otra (por ejemplo, luz de rodaje o de aterrizaje).",
+    params: [], init: c => { c.st.pos = 1; },
+    draw: c => ln(-40, 0, -16, 0) + dotP(-16, 0) + ln(16, -20, 40, -20) + ln(16, 20, 40, 20) + ring(16, -20) + ring(16, 20) + (c.st.pos === 1 ? ln(-16, 0, 14, -18) : ln(-16, 0, 14, 18)) + txt(30, -26, "1", "txt sm") + txt(30, 34, "2", "txt sm"),
+    prims: (c, P) => [{ k: "R", a: P(0), b: P(1), g: () => c.st.pos === 1 ? 1 / 0.002 : 1 / ROFF, role: "main" }, { k: "R", a: P(0), b: P(2), g: () => c.st.pos === 2 ? 1 / 0.002 : 1 / ROFF, role: "b" }],
+  },
+  pulsador: {
+    n: "Pulsador (normalmente abierto)", cat: "mando", pre: "PB", pins: H2, click: true, momentary: true,
+    d: "Cierra el circuito solo mientras se mantiene pulsado; al soltarlo, se abre.",
+    params: [], init: c => { c.st.on = false; },
+    draw: c => leads(-16, 16) + dotP(-16, 0) + dotP(16, 0) + (c.st.on ? ln(-18, -3, 18, -3) + ln(0, -3, 0, -18) : ln(-18, -10, 18, -10) + ln(0, -10, 0, -24)) + ln(-6, c.st.on ? -18 : -24, 6, c.st.on ? -18 : -24),
+    prims: (c, P) => [{ k: "R", a: P(0), b: P(1), g: () => c.st.on ? 1 / 0.002 : 1 / ROFF, role: "main" }],
+  },
+  rele: {
+    n: "Bobina de relé", cat: "mando", pre: "K", pins: H2, label: c => c.p.K,
+    d: "Electroimán: con poca corriente en su bobina mueve los contactos que llevan la corriente grande (motores, luces potentes). Sus contactos llevan el mismo nombre (K1…).",
+    params: [{ k: "K", l: "Nombre del relé", o: O.K, def: "K1" }, { k: "v", l: "Tensión de la bobina", o: O.relV, def: "28" }],
+    draw: c => leads(-15, 15) + `<rect class="s bodyfill" x="-15" y="-11" width="30" height="22"/>` + ln(-15, 11, 15, -11),
+    prims: (c, P, X) => { const m = X(); const R = +c.p.v * 10; return [{ k: "R", a: P(0), b: m, g: () => 1 / R, role: "main" }, { k: "L", a: m, b: P(1), L: 0.15, role: "L" }]; },
+    tick: (c, sim) => { const I = Math.abs(sim.prim(c, "main").ia), In = 0.1; if (!c.st.act && I > 0.6 * In) c.st.act = true; else if (c.st.act && I < 0.3 * In) c.st.act = false; },
+  },
+  contacto_na: {
+    n: "Contacto de relé (NA)", cat: "mando", pre: "K", pins: H2, label: c => c.p.K,
+    d: "Contacto normalmente abierto: se cierra cuando se excita la bobina del relé del mismo nombre.",
+    params: [{ k: "K", l: "Relé que lo mueve", o: O.K, def: "K1" }],
+    draw: (c, sim) => { const on = sim ? sim.relayOn(c.p.K) : false; return leads(-16, 16) + dotP(-16, 0) + dotP(16, 0) + (on ? ln(-16, 0, 16, -3) : ln(-16, 0, 13, -15)); },
+    prims: (c, P, X, sim) => [{ k: "R", a: P(0), b: P(1), g: () => sim.relayOn(c.p.K) ? 1 / 0.003 : 1 / ROFF, role: "main" }],
+  },
+  contacto_nc: {
+    n: "Contacto de relé (NC)", cat: "mando", pre: "K", pins: H2, label: c => c.p.K,
+    d: "Contacto normalmente cerrado: se abre cuando se excita la bobina del relé del mismo nombre.",
+    params: [{ k: "K", l: "Relé que lo mueve", o: O.K, def: "K1" }],
+    draw: (c, sim) => { const on = sim ? sim.relayOn(c.p.K) : false; return leads(-16, 16) + dotP(-16, 0) + dotP(16, 0) + ln(16, 0, 16, -8) + (on ? ln(-16, 0, 13, -16) : ln(-16, 0, 18, -7)); },
+    prims: (c, P, X, sim) => [{ k: "R", a: P(0), b: P(1), g: () => sim.relayOn(c.p.K) ? 1 / ROFF : 1 / 0.003, role: "main" }],
+  },
+  lampara: {
+    n: "Lámpara", cat: "receptor", pre: "L", pins: H2, click: false,
+    d: "Receptor que da luz. Luce bien a su tensión nominal; con menos, poco; con mucha más, se funde.",
+    params: [{ k: "spec", l: "Tensión y potencia", o: O.lamp, def: "28-10" }, { k: "col", l: "Color de la luz", o: O.lampColor, def: "blanca" }],
+    draw: c => leads(-17, 17) + `<circle class="glow" cx="0" cy="0" r="26" style="opacity:0"/>` + `<circle class="s bodyfill lampbody" cx="0" cy="0" r="17"/>` + (c.st.burnt ? ln(-12, -12, -2, -2) + ln(12, 12, 2, 2) + ln(-12, 12, 12, -12) : ln(-12, -12, 12, 12) + ln(-12, 12, 12, -12)),
+    prims: (c, P) => [{ k: "R", a: P(0), b: P(1), g: () => c.st.burnt ? 1 / ROFF : 1 / lampSpec(c).r, role: "main" }],
+    tick: (c, sim, dt) => heat(c, sim.prim(c, "main").p, lampSpec(c).p, 1.8, dt / 0.25, "La lámpara se ha fundido: tenía mucha más tensión que la nominal."),
+  },
+  motor: {
+    n: "Motor", cat: "receptor", pre: "M", pins: H2, pinN: ["+", "−"],
+    d: "Convierte la energía eléctrica en movimiento: bombas, actuadores y ventiladores. Si se invierte la polaridad, gira al revés.",
+    params: [{ k: "spec", l: "Tensión y potencia", o: O.motor, def: "28-200" }],
+    draw: c => circ("", `<g class="rotor"><line class="s" x1="-9" y1="0" x2="9" y2="0"/><line class="s" x1="0" y1="-9" x2="0" y2="9"/></g>`) + txt(0, 32, "M", "txt sm"),
+    prims: (c, P, X) => { const m = X(); const s = motorSpec(c); return [{ k: "R", a: P(0), b: m, g: () => 1 / s.r, role: "main" }, { k: "L", a: m, b: P(1), L: 0.005, role: "L" }]; },
+  },
+  bocina: {
+    n: "Bocina o altavoz", cat: "receptor", pre: "BZ", pins: H2,
+    d: "Avisador acústico: suena cuando le llega tensión (por ejemplo, el aviso del tren de aterrizaje).",
+    params: [{ k: "spec", l: "Tensión y potencia", o: O.bocina, def: "28-8" }],
+    draw: c => ln(-40, 0, -14, 0) + ln(10, 0, 40, 0) + `<rect class="s bodyfill" x="-14" y="-9" width="9" height="18"/><path class="s bodyfill" d="M-5 -9 L10 -21 L10 21 L-5 9 Z"/>` + `<g class="waves" style="opacity:0"><path class="s" d="M16 -9 a12 12 0 0 1 0 18"/><path class="s" d="M21 -15 a19 19 0 0 1 0 30"/></g>`,
+    prims: (c, P) => [{ k: "R", a: P(0), b: P(1), g: () => 1 / lampSpec(c).r, role: "main" }],
+  },
+  transformador: {
+    n: "Transformador", cat: "pasivo", pre: "T", pins: [[-40, -20], [-40, 20], [40, -20], [40, 20]], pinN: ["primario", "primario", "secundario", "secundario"],
+    d: "Dos bobinas sobre un núcleo de hierro: cambia la tensión de la alterna según la relación de espiras. Con continua no funciona y su primario se comporta casi como un cortocircuito.",
+    params: [{ k: "rel", l: "Relación", o: O.trafo, def: "115-26" }],
+    draw: c => ln(-40, -20, -14, -20) + ln(-40, 20, -14, 20) + ln(14, -20, 40, -20) + ln(14, 20, 40, 20) + `<path class="s" d="M-14 -20 a5 5 0 0 1 0 10 a5 5 0 0 1 0 10 a5 5 0 0 1 0 10 a5 5 0 0 1 0 10"/><path class="s" d="M14 -20 a5 5 0 0 0 0 10 a5 5 0 0 0 0 10 a5 5 0 0 0 0 10 a5 5 0 0 0 0 10"/>` + ln(-3, -24, -3, 24) + ln(3, -24, 3, 24),
+    prims: (c, P, X) => { const s = trafoSpec(c); const x1 = X(), x2 = X(); const big = s.vp > 150, L1 = big ? 2 : 0.6, R1 = big ? 8 : 4, L2 = L1 * s.n * s.n, M = 0.9995 * Math.sqrt(L1 * L2); return [{ k: "R", a: P(0), b: x1, g: () => 1 / R1, role: "main" }, { k: "R", a: P(2), b: x2, g: () => 1 / Math.max(0.01, R1 * s.n * s.n), role: "sec" }, { k: "K", a1: x1, b1: P(1), a2: x2, b2: P(3), L1, L2, M, role: "K" }]; },
+  },
+  amperimetro: {
+    n: "Amperímetro", cat: "medida", pre: "A", pins: H2, pinN: ["+", "−"], meter: true,
+    d: "Mide la intensidad. Se conecta en SERIE, abriendo el circuito; su resistencia es casi nula. En paralelo provoca un cortocircuito.",
+    params: [],
+    draw: c => circ("A") + txt(-26, -12, "+", "txt sm"),
+    prims: (c, P) => [{ k: "R", a: P(0), b: P(1), g: () => c.st.burnt ? 1 / ROFF : 1 / 0.01, role: "main" }],
+    tick: (c, sim, dt) => protect(c, sim.prim(c, "main").ia, 10, 0.01, 0, dt, "Se ha fundido el fusible del amperímetro: lo has conectado en paralelo (cortocircuito). El amperímetro va en serie."),
+    read: (c, sim) => c.st.burnt ? "FUS" : siFmt(sim.prim(c, "main").ia, "A", 2),
+  },
+  voltimetro: {
+    n: "Voltímetro", cat: "medida", pre: "V", pins: H2, pinN: ["+", "−"], meter: true,
+    d: "Mide la tensión entre dos puntos. Se conecta en PARALELO con lo que se mide; su resistencia es muy alta.",
+    params: [],
+    draw: c => circ("V") + txt(-26, -12, "+", "txt sm"),
+    prims: (c, P) => [{ k: "R", a: P(0), b: P(1), g: () => 1e-7, role: "main" }],
+    read: (c, sim) => siFmt(sim.prim(c, "main").va, "V", 2),
+  },
+  polimetro: {
+    n: "Polímetro", cat: "medida", pre: "PM", pins: [[-20, 40], [20, 40]], pinN: ["COM", "V Ω A"], meter: true, click: true,
+    d: "Aparato que mide tensión, intensidad y resistencia según la función elegida. La resistencia se mide SIEMPRE sin tensión; para medir intensidad, el polímetro va en serie.",
+    params: [{ k: "m", l: "Función", o: O.pm, def: "vdc" }],
+    draw: c => `<rect class="s bodyfill" x="-30" y="-36" width="60" height="62" rx="6"/>` + `<rect class="s" x="-23" y="-29" width="46" height="18"/>` + ln(-20, 26, -20, 40) + ln(20, 26, 20, 40) + txt(-20, 22, "COM", "txt xs") + txt(20, 22, "VΩA", "txt xs") + `<circle class="s" cx="0" cy="4" r="7"/>` + txt(0, -15, "", "txt xs pmread"),
+    prims: (c, P) => [{ k: "V", a: P(1), b: P(0), v: () => c.p.m === "ohm" || c.p.m === "cont" ? 3 : 0, r: 0, rf: () => c.p.m === "adc" ? (c.st.burnt ? ROFF : 0.05) : (c.p.m === "ohm" || c.p.m === "cont") ? 1000 : 1e7, role: "main" }],
+    tick: (c, sim, dt) => { if (c.p.m === "adc") protect(c, sim.prim(c, "main").ia, 10, 0.01, 0, dt, "Se ha fundido el fusible del polímetro: en función A estaba en paralelo. Para medir intensidad va en serie."); },
+    read: (c, sim) => {
+      const p = sim.prim(c, "main");
+      if (c.p.m === "vdc") return siFmt(p.va, "V", 2);
+      if (c.p.m === "vac") return siFmt(Math.sqrt(Math.max(0, p.v2 - p.va * p.va)), "V~", 2);
+      if (c.p.m === "adc") return c.st.burnt ? "FUS" : siFmt(p.ia, "A", 2);
+      const v = p.va, R = 1000 * v / Math.max(1e-9, 3 - v);
+      if (sim.liveAt(c)) return "¡TENSIÓN!";
+      if (v > 2.97 || R > 2e5) return "OL";
+      if (c.p.m === "cont") return R < 20 ? "♪ " + siFmt(R, "Ω", 1) : siFmt(R, "Ω", 1);
+      return siFmt(R, "Ω", 2);
+    },
+  },
+  masa: {
+    n: "Masa (estructura)", cat: "conex", pre: "", pins: [[0, -20]], ground: true,
+    d: "Unión a la estructura metálica del avión, que hace de conductor de retorno: todas las masas están unidas entre sí.",
+    params: [],
+    draw: c => ln(0, -20, 0, 2) + ln(-16, 2, 16, 2) + ln(-10, 9, 10, 9) + ln(-4, 16, 4, 16),
+    prims: () => [],
+  },
+  union: {
+    n: "Cruce con conexión (unión)", cat: "conex", pre: "", pins: [[0, 0]],
+    d: "Punto de unión: los cables que llegan a él quedan conectados. Dos cables que se cruzan sin punto NO están unidos.",
+    params: [],
+    draw: c => `<circle class="fillink" cx="0" cy="0" r="5"/>`,
+    prims: () => [],
+  },
+  barra: {
+    n: "Barra (bus)", cat: "conex", pre: "", pins: [[-60, 0], [-20, 0], [20, 0], [60, 0]], join: true, label: c => c.p.bus,
+    d: "Barra de distribución: todos sus puntos están a la misma tensión y de ella salen los circuitos, cada uno con su protección.",
+    params: [{ k: "bus", l: "Nombre", o: O.bus, def: "DC BUS" }],
+    draw: c => `<rect class="fillink" x="-70" y="-4" width="140" height="8" rx="2"/>`,
+    prims: () => [],
+  },
+  conector: {
+    n: "Conector (clavija y base)", cat: "conex", pre: "J", pins: H2, click: true,
+    d: "Une dos tramos de cableado de forma desmontable. Si está desconectado, el circuito queda abierto.",
+    params: [], init: c => { c.st.on = true; },
+    draw: c => { const g = c.st.on ? 0 : 8; return ln(-40, 0, -10 - g, 0) + `<path class="s" d="M${-10 - g} -10 L${-2 - g} 0 L${-10 - g} 10"/>` + `<path class="s" d="M${2 + g} -10 L${10 + g} 0 L${2 + g} 10"/>` + ln(2 + g, 0, 40, 0); },
+    prims: (c, P) => [{ k: "R", a: P(0), b: P(1), g: () => c.st.on ? 1 / 0.002 : 1 / ROFF, role: "main" }],
+  },
+  antena: {
+    n: "Antena", cat: "conex", pre: "ANT", pins: [[0, 40]],
+    d: "Emite o recibe las ondas de radio. Se une al equipo con un cable coaxial; en continua no consume corriente.",
+    params: [],
+    draw: c => ln(0, 40, 0, -6) + ln(0, -6, -16, -26) + ln(0, -6, 16, -26) + ln(0, -6, 0, -26),
+    prims: () => [],
+  },
+};
+
+/* calentamiento genérico (lámparas, resistencias, LED…): si x > lim·k durante un rato, se quema */
+function heat(c, x, lim, k, dt, msg) {
+  c.st.th = Math.max(0, (c.st.th || 0) + (x > lim * k ? dt * 4 : -dt));
+  c.st.hot = x > lim * 1.0001 && !c.st.burnt;
+  if (!c.st.burnt && c.st.th > 1) { c.st.burnt = true; c.st.th = 0; EVENTS.push({ c, msg }); }
+}
+function overV(c, v, vmax, polar, dt) {
+  const bad = Math.abs(v) > vmax * 1.05 || (polar && v < -1.5);
+  c.st.th = Math.max(0, (c.st.th || 0) + (bad ? dt * 5 : -dt));
+  if (!c.st.burnt && c.st.th > 1) { c.st.burnt = true; c.st.th = 0; EVENTS.push({ c, msg: polar && v < 0 ? "El condensador electrolítico ha reventado: estaba conectado al revés." : "El condensador se ha estropeado: tenía más tensión de la que admite." }); }
+}
+/* protecciones: térmico (I²·t con constante tau) y magnético (instantáneo a mag·In) */
+function protect(c, i, In, tau, mag, dt, msg) {
+  const r = (i * i) / (In * In);
+  c.st.th = Math.max(0, (c.st.th || 0) + (r > 1.05 ? (r - 1) * dt / tau : -dt / tau));
+  if (!c.st.burnt && (c.st.th > 1 || (mag && Math.abs(i) > mag * In))) { c.st.burnt = true; c.st.th = 0; EVENTS.push({ c, msg }); }
+}
+let EVENTS = [];
+function shortCheck(c, sim, dt) {
+  const i = Math.abs(sim.prim(c, "main").ia);
+  c.st.sc = i > 150 ? (c.st.sc || 0) + dt : 0;
+  if (c.st.sc > 0.05 && !c.st.scMsg) { c.st.scMsg = true; EVENTS.push({ c, msg: "¡Cortocircuito! La fuente da más de 150 A. Falta una protección o hay un cable o un aparato que une los dos polos." }); }
+  if (i < 50) c.st.scMsg = false;
+}
+
+function rotP([x, y], r) { return r === 90 ? [-y, x] : r === 180 ? [-x, -y] : r === 270 ? [y, -x] : [x, y]; }
+function pinPos(c, i) { const [x, y] = rotP(DEFS[c.t].pins[i], c.r || 0); return [c.x + x, c.y + y]; }
+
+function newComp(t, x, y, r = 0, id) {
+  const d = DEFS[t];
+  const c = { id: id || uid(), t, x, y, r, p: {}, st: {} };
+  for (const pr of d.params) c.p[pr.k] = pr.def;
+  if (d.init) d.init(c);
+  return c;
+}
+let UIDN = 1;
+function uid() { return "c" + (UIDN++) + Math.random().toString(36).slice(2, 6); }
+
+/* ----- el simulador ----- */
+class Sim {
+  constructor(comps, wires) {
+    this.comps = comps; this.wires = wires; this.t = 0;
+    // 1) nodos: uniones por cable, por posición coincidente, barras y masas
+    const par = new Map();
+    const find = k => { while (par.get(k) !== k) { par.set(k, par.get(par.get(k))); k = par.get(k); } return k; };
+    const add = k => { if (!par.has(k)) par.set(k, k); };
+    const uni = (a, b) => { add(a); add(b); const ra = find(a), rb = find(b); if (ra !== rb) par.set(ra, rb); };
+    add("GND");
+    const byPos = new Map();
+    for (const c of comps) {
+      const d = DEFS[c.t];
+      d.pins.forEach((_, i) => {
+        const k = c.id + ":" + i; add(k);
+        const [x, y] = pinPos(c, i), pk = x + "," + y;
+        if (byPos.has(pk)) uni(k, byPos.get(pk)); else byPos.set(pk, k);
+        if (d.ground) uni(k, "GND");
+        if (d.join && i > 0) uni(k, c.id + ":0");
+      });
+    }
+    const ids = new Set(comps.map(c => c.id));
+    for (const w of wires) if (ids.has(w.a.c) && ids.has(w.b.c)) uni(w.a.c + ":" + w.a.p, w.b.c + ":" + w.b.p);
+    const nodeId = new Map(); nodeId.set(find("GND"), 0);
+    let n = 1;
+    for (const k of par.keys()) { const r = find(k); if (!nodeId.has(r)) nodeId.set(r, n++); }
+    this.pinNode = k => nodeId.get(find(k));
+    this.nExt = n;
+    // 2) primitivas
+    this.prims = []; this.byComp = new Map();
+    let nInt = n;
+    const X = () => nInt++;
+    for (const c of comps) {
+      const d = DEFS[c.t];
+      const P = i => this.pinNode(c.id + ":" + i);
+      const ps = d.prims(c, P, X, this);
+      for (const p of ps) { p.c = c; p.va = 0; p.v2 = 0; p.ia = 0; p.i2 = 0; p.vab = 0; p.cur = 0; p.p = 0; p.pe = 0; p.i = p.i || 0; p.v = p.v || 0; p.i1 = 0; p.i2k = 0; p.mode = 0; }
+      this.prims.push(...ps);
+      this.byComp.set(c.id, ps);
+    }
+    this.N = nInt; this.V = new Float64Array(nInt);
+    this.acF = Math.max(0, ...this.prims.map(p => p.ac || 0));
+    this.dt = this.acF ? 1 / (this.acF * 40) : 5e-4;
+    this.tau = this.acF ? Math.max(0.05, 20 / this.acF) : 0.03; // en alterna se promedia durante unos 20 ciclos
+    this.relays = new Map();
+  }
+  prim(c, role) { return (this.byComp.get(c.id) || []).find(p => p.role === role); }
+  relayOn(K) { for (const c of this.comps) if (c.t === "rele" && c.p.K === K && c.st.act) return true; return false; }
+  carry(old) { // conserva cargas de condensadores y corrientes de bobinas al reconstruir
+    if (!old) return;
+    for (const p of this.prims) { const q = old.prim(p.c, p.role); if (q && q.k === p.k) { if (p.k === "C") p.v = q.v; if (p.k === "L") p.i = q.i; if (p.k === "K") { p.i1 = q.i1; p.i2k = q.i2k; } if (p.k === "D") p.mode = q.mode; p.va = q.va; p.v2 = q.v2; p.ia = q.ia; p.i2 = q.i2; p.pe = q.pe; } }
+  }
+  step() {
+    const N = this.N - 1, dt = this.dt, t = this.t + dt;
+    if (N <= 0) { this.t = t; return; }
+    const prims = this.prims;
+    let ok = false;
+    for (let it = 0; it < 12 && !ok; it++) {
+      const A = new Float64Array(N * N), z = new Float64Array(N);
+      const G = (a, b, g) => { if (a > 0) A[(a - 1) * N + a - 1] += g; if (b > 0) A[(b - 1) * N + b - 1] += g; if (a > 0 && b > 0) { A[(a - 1) * N + b - 1] -= g; A[(b - 1) * N + a - 1] -= g; } };
+      const I = (a, b, i) => { if (a > 0) z[a - 1] -= i; if (b > 0) z[b - 1] += i; }; // corriente i de a a b por dentro del elemento
+      const VC = (oa, ob, ia, ib, g) => { // corriente g·(V(ia)−V(ib)) de oa a ob
+        const add = (r, col, v) => { if (r > 0 && col > 0) A[(r - 1) * N + col - 1] += v; };
+        add(oa, ia, g); add(oa, ib, -g); add(ob, ia, -g); add(ob, ib, g);
+      };
+      for (let k = 0; k < N; k++) A[k * N + k] += GMIN;
+      for (const p of prims) {
+        switch (p.k) {
+          case "R": G(p.a, p.b, typeof p.g === "function" ? p.g() : p.g); break;
+          case "V": { const r = p.rf ? p.rf() : p.r; const g = 1 / Math.max(r, 1e-4); G(p.a, p.b, g); I(p.b, p.a, p.v(t) * g); break; }
+          case "C": { if (p.open && p.open()) { G(p.a, p.b, 1e-9); break; } const g = p.C / dt; G(p.a, p.b, g); I(p.b, p.a, g * p.v); break; }
+          case "L": { const g = dt / p.L; G(p.a, p.b, g); I(p.a, p.b, p.i); break; }
+          case "K": {
+            const det = p.L1 * p.L2 - p.M * p.M, g11 = dt * p.L2 / det, g22 = dt * p.L1 / det, g12 = -dt * p.M / det;
+            VC(p.a1, p.b1, p.a1, p.b1, g11); VC(p.a1, p.b1, p.a2, p.b2, g12);
+            VC(p.a2, p.b2, p.a1, p.b1, g12); VC(p.a2, p.b2, p.a2, p.b2, g22);
+            I(p.a1, p.b1, p.i1); I(p.a2, p.b2, p.i2k); break;
+          }
+          case "D": {
+            if (p.open && p.open()) { G(p.a, p.b, 1e-9); break; }
+            const g = 1 / p.ron;
+            if (p.mode === 1) { G(p.a, p.b, g); I(p.b, p.a, p.vf * g); }
+            else if (p.mode === -1) { G(p.a, p.b, g); I(p.a, p.b, p.vz * g); }
+            else G(p.a, p.b, 1e-9);
+            break;
+          }
+        }
+      }
+      const x = solve(A, z, N);
+      if (!x) { this.t = t; return; }
+      this.V[0] = 0; for (let k = 0; k < N; k++) this.V[k + 1] = x[k];
+      ok = true;
+      for (const p of prims) if (p.k === "D" && !(p.open && p.open())) {
+        const v = this.V[p.a] - this.V[p.b];
+        let m = p.mode;
+        if (m === 1 && (v - p.vf) / p.ron < -1e-9) m = 0;
+        else if (m === -1 && v > -p.vz) m = 0;
+        else if (m === 0) { if (v > p.vf + 1e-9) m = 1; else if (v < -p.vz - 1e-9) m = -1; }
+        if (m !== p.mode) { p.mode = m; ok = false; }
+      }
+    }
+    // corrientes y estados
+    const V = this.V, a = Math.min(1, dt / this.tau);
+    for (const p of prims) {
+      let vab = 0, cur = 0;
+      switch (p.k) {
+        case "R": vab = V[p.a] - V[p.b]; cur = vab * (typeof p.g === "function" ? p.g() : p.g); break;
+        case "V": { const r = p.rf ? p.rf() : p.r; vab = V[p.a] - V[p.b]; cur = (vab - p.v(t)) / Math.max(r, 1e-4); break; }
+        case "C": vab = V[p.a] - V[p.b]; cur = (p.open && p.open()) ? vab * 1e-9 : p.C / dt * (vab - p.v); p.v = vab; break;
+        case "L": vab = V[p.a] - V[p.b]; cur = p.i + dt / p.L * vab; p.i = cur; break;
+        case "K": {
+          const v1 = V[p.a1] - V[p.b1], v2 = V[p.a2] - V[p.b2];
+          const det = p.L1 * p.L2 - p.M * p.M;
+          p.i1 += dt * (p.L2 * v1 - p.M * v2) / det; p.i2k += dt * (-p.M * v1 + p.L1 * v2) / det;
+          vab = v1; cur = p.i1; break;
+        }
+        case "D": vab = V[p.a] - V[p.b]; cur = (p.open && p.open()) ? 0 : p.mode === 1 ? (vab - p.vf) / p.ron : p.mode === -1 ? (vab + p.vz) / p.ron : vab * 1e-9; break;
+      }
+      p.vab = vab; p.cur = cur;
+      p.va += (vab - p.va) * a; p.v2 += (vab * vab - p.v2) * a;
+      p.ia += (cur - p.ia) * a; p.i2 += (cur * cur - p.i2) * a;
+      const pin = p.k === "V" ? -vab * cur : vab * cur; // potencia instantánea (la media sale del filtro)
+      p.pe = (p.pe || 0) + (pin - (p.pe || 0)) * a;
+      p.p = p.k === "V" ? p.pe : Math.abs(p.pe);
+    }
+    this.t = t;
+    for (const c of this.comps) { const d = DEFS[c.t]; if (d.tick) d.tick(c, this, dt); }
+  }
+  run(seconds, maxSteps = 1e6) { const n = Math.min(maxSteps, Math.ceil(seconds / this.dt)); for (let i = 0; i < n; i++) this.step(); }
+  nodeV(c, i) { return this.V[this.pinNode(c.id + ":" + i)] || 0; }
+  /* ¿hay alguna fuente que dé tensión al circuito donde está conectado el polímetro? (para el aviso del óhmetro) */
+  liveAt(meter) {
+    const adj = new Map(); const link = (a, b) => { if (!adj.has(a)) adj.set(a, []); if (!adj.has(b)) adj.set(b, []); adj.get(a).push(b); adj.get(b).push(a); };
+    const src = new Set();
+    for (const p of this.prims) {
+      if (p.c === meter) continue;
+      const cond = p.k === "R" ? (typeof p.g === "function" ? p.g() : p.g) > 1e-6 : p.k === "V" || p.k === "L" || p.k === "C" || p.k === "K" || (p.k === "D");
+      if (p.k === "V") { const val = Math.abs(p.v(this.t)) + Math.abs(p.v(this.t + 0.0007)); if (val > 0.01) { src.add(p.a); src.add(p.b); } }
+      if (p.k === "K") { link(p.a1, p.b1); link(p.a2, p.b2); continue; }
+      if (cond) link(p.a, p.b);
+    }
+    if (!src.size) return false;
+    const start = this.pinNode(meter.id + ":0"), seen = new Set([start]), q = [start];
+    const tgt = this.pinNode(meter.id + ":1");
+    let reachSrc = false, reachTgt = false;
+    while (q.length) { const u = q.shift(); if (src.has(u)) reachSrc = true; if (u === tgt) reachTgt = true; for (const v of adj.get(u) || []) if (!seen.has(v)) { seen.add(v); q.push(v); } }
+    return reachSrc && reachTgt;
+  }
+}
+function solve(A, b, n) {
+  const M = A, x = Float64Array.from(b);
+  for (let c = 0; c < n; c++) {
+    let piv = c, mx = Math.abs(M[c * n + c]);
+    for (let r = c + 1; r < n; r++) { const v = Math.abs(M[r * n + c]); if (v > mx) { mx = v; piv = r; } }
+    if (mx < 1e-300) return null;
+    if (piv !== c) { for (let k = 0; k < n; k++) { const t = M[c * n + k]; M[c * n + k] = M[piv * n + k]; M[piv * n + k] = t; } const t = x[c]; x[c] = x[piv]; x[piv] = t; }
+    const d = M[c * n + c];
+    for (let r = c + 1; r < n; r++) {
+      const f = M[r * n + c] / d; if (f === 0) continue;
+      for (let k = c; k < n; k++) M[r * n + k] -= f * M[c * n + k];
+      x[r] -= f * x[c];
+    }
+  }
+  for (let c = n - 1; c >= 0; c--) { let s = x[c]; for (let k = c + 1; k < n; k++) s -= M[c * n + k] * x[k]; x[c] = s / M[c * n + c]; }
+  return x;
+}
+// @@MOTOR-FIN
+
+// @@MISIONES-INICIO
+/* ===== Retos: cada uno trae piezas de partida (bloqueadas) y se comprueba simulando el circuito del alumno ===== */
+function freshCopy(comps) {
+  return comps.map(c => { const n = { ...c, p: { ...c.p }, st: {} }; const d = DEFS[c.t]; if (d.init) d.init(n); return n; });
+}
+/* Ejecuta el circuito del alumno desde cero con un ajuste de mandos y devuelve lecturas */
+function runCase(comps, wires, setup, t = 2) {
+  const cl = freshCopy(comps);
+  const of = tp => cl.filter(c => c.t === tp);
+  const byId = k => cl.find(c => c.id === k) || cl.find(c => c.name === k);
+  if (setup) setup({ of, byId, all: cl });
+  const sim = new Sim(cl, wires);
+  EVENTS.length = 0;
+  sim.run(t, 60000);
+  const ev = EVENTS.splice(0);
+  const pr = c => sim.prim(c, "main");
+  const R = {
+    sim, of, byId, ev,
+    bright: id => { const c = byId(id); if (!c || c.st.burnt) return 0; const p = pr(c); return c.t === "lampara" ? p.p / lampSpec(c).p : c.t === "motor" ? p.p / lampSpec(c).p : Math.abs(p.ia) / 0.015; },
+    I: c => { c = typeof c === "string" ? byId(c) : c; return pr(c) ? pr(c).ia : 0; },
+    V: c => { c = typeof c === "string" ? byId(c) : c; return pr(c) ? pr(c).va : 0; },
+    burnt: c => { c = typeof c === "string" ? byId(c) : c; return !!(c && c.st.burnt); },
+    anyBurnt: () => cl.some(c => c.st.burnt),
+    burntList: () => cl.filter(c => c.st.burnt),
+  };
+  return R;
+}
+const setAll = (h, tp, f) => h.of(tp).forEach(f);
+const on = h => { setAll(h, "interruptor", c => c.st.on = true); setAll(h, "pulsador", c => c.st.on = true); };
+const off = h => { setAll(h, "interruptor", c => c.st.on = false); setAll(h, "pulsador", c => c.st.on = false); };
+const tripAll = h => { setAll(h, "disyuntor", c => c.st.burnt = true); setAll(h, "fusible", c => c.st.burnt = true); };
+const has = (comps, tp) => comps.some(c => c.t === tp);
+const nameOf = c => c.name || c.t;
+const pct = x => Math.round(x * 100) + NB + "%";
+const ok = (cond, txt, hint) => ({ ok: !!cond, txt, hint });
+const quemados = R => R.burntList().filter(c => c.t !== "disyuntor" && c.t !== "fusible").map(nameOf);
+const saltados = R => R.burntList().filter(c => c.t === "disyuntor" || c.t === "fusible").map(nameOf);
+const sinAverias = (R, extra = "", gate = true) => { const q = quemados(R), s = saltados(R); return ok(gate && !q.length && !s.length, "En funcionamiento normal no salta ninguna protección ni se quema nada" + extra, q.length ? "Se ha quemado: " + q.join(", ") + "." : s.length ? "Ha saltado: " + s.join(", ") + ". Revisa el calibre o busca un cortocircuito." : ""); };
+
+/* piezas de partida (x, y en la rejilla de 20 px; r = giro) */
+const P = (t, name, x, y, r = 0, p = {}, st = {}) => ({ t, name, x, y, r, p, st, lock: true });
+const masaBajo = (x, y) => P("masa", "", x, y + 60, 0);
+
+const MISIONES = [
+  {
+    id: "lectura", titulo: "La luz de lectura", ce: "RA2 · CE c, d",
+    contexto: "En la cabina del avión hay que montar la luz de lectura del copiloto. Tienes la batería del avión (24 V) y la lámpara de 28 V · 10 W ya colocadas.",
+    objetivo: "Alimenta la lámpara a través de un disyuntor de 5 A como máximo y de un interruptor. Los retornos van a masa.",
+    piezas: [P("bateria", "BAT1", 120, 260, 90, { v: "24" }), masaBajo(120, 260), P("lampara", "L1", 640, 260, 90, { spec: "28-10" }), masaBajo(640, 260)],
+    check: (comps, wires) => {
+      const A = runCase(comps, wires, on), B = runCase(comps, wires, off), C = runCase(comps, wires, h => { on(h); tripAll(h); });
+      const cbs = comps.filter(c => c.t === "disyuntor");
+      return [
+        ok(A.bright("L1") >= 0.5 && !A.burnt("L1"), "Con el interruptor cerrado, la lámpara luce", "Comprueba que hay un camino cerrado: + de la batería → protección → interruptor → lámpara → masa."),
+        ok(has(comps, "interruptor") && A.bright("L1") >= 0.5 && B.bright("L1") < 0.05, "Con el interruptor abierto, la lámpara se apaga", has(comps, "interruptor") ? "El interruptor tiene que estar en serie con la lámpara, no en paralelo." : "Falta el interruptor."),
+        ok(cbs.length && A.bright("L1") >= 0.5 && C.bright("L1") < 0.05, "El disyuntor está en serie: si salta, la lámpara se apaga", cbs.length ? "El disyuntor tiene que estar en el camino de la corriente." : "Falta el disyuntor."),
+        ok(cbs.length && cbs.every(c => +c.p.In <= 5), "El disyuntor es de 5 A como máximo (la lámpara consume unos 0,3 A)", cbs.length ? "Selecciona el disyuntor y cambia su intensidad nominal." : "Falta el disyuntor."),
+        sinAverias(A, "", A.bright("L1") >= 0.5),
+      ];
+    },
+  },
+  {
+    id: "navegacion", titulo: "Las luces de navegación", ce: "RA2 · CE c, d, j",
+    contexto: "Las tres luces de navegación (roja en el ala izquierda, verde en la derecha y blanca en la cola) se encienden con un solo interruptor y comparten disyuntor.",
+    objetivo: "Monta las tres lámparas de modo que, si se funde una, las otras dos sigan luciendo.",
+    piezas: [P("bateria", "BAT1", 100, 300, 90, { v: "24" }), masaBajo(100, 300), P("disyuntor", "CB1", 220, 200, 0, { In: "5" }), P("interruptor", "S1", 380, 200, 0),
+      P("lampara", "L1", 560, 300, 90, { spec: "28-25", col: "roja" }), masaBajo(560, 300), P("lampara", "L2", 680, 300, 90, { spec: "28-25", col: "verde" }), masaBajo(680, 300),
+      P("lampara", "L3", 800, 300, 90, { spec: "28-25", col: "blanca" }), masaBajo(800, 300)],
+    check: (comps, wires) => {
+      const A = runCase(comps, wires, on), B = runCase(comps, wires, off), F = runCase(comps, wires, h => { on(h); h.byId("L1").st.burnt = true; });
+      const all = ["L1", "L2", "L3"].every(id => A.bright(id) >= 0.5);
+      return [
+        ok(["L1", "L2", "L3"].every(id => A.bright(id) >= 0.5), "Con S1 cerrado lucen las tres luces", "Cada lámpara necesita su camino desde S1 hasta masa."),
+        ok(all && ["L1", "L2", "L3"].every(id => B.bright(id) < 0.05), "Con S1 abierto se apagan las tres", "S1 tiene que estar antes de que el circuito se reparta a las lámparas."),
+        ok(all && F.bright("L2") >= 0.5 && F.bright("L3") >= 0.5, "Si se funde la roja, la verde y la blanca siguen luciendo (están en paralelo)", "En serie, una lámpara fundida apaga las demás. Conecta cada lámpara entre el mismo punto de alimentación y masa."),
+        sinAverias(A, "", all),
+      ];
+    },
+  },
+  {
+    id: "serie14", titulo: "Dos lámparas de 14 V en una red de 28 V", ce: "RA2 · CE i, j",
+    contexto: "En el almacén solo quedan lámparas de 14 V · 5 W, pero la red del avión es de 28 V.",
+    objetivo: "Conecta las dos lámparas para que las dos luzcan a su tensión nominal, sin fundirse, protegidas por CB1.",
+    piezas: [P("generador", "G1", 100, 300, 90, { tipo: "cc28" }), masaBajo(100, 300), P("disyuntor", "CB1", 240, 200, 0, { In: "3" }),
+      P("lampara", "L1", 460, 200, 0, { spec: "14-5" }), P("lampara", "L2", 660, 300, 90, { spec: "14-5" }), masaBajo(660, 300)],
+    check: (comps, wires) => {
+      const A = runCase(comps, wires), F = runCase(comps, wires, h => h.byId("L1").st.burnt = true), T = runCase(comps, wires, tripAll);
+      const b1 = A.bright("L1"), b2 = A.bright("L2"), nom = b1 >= 0.8 && b1 <= 1.25 && b2 >= 0.8 && b2 <= 1.25;
+      return [
+        ok(!A.burnt("L1") && !A.burnt("L2") && (b1 > 0.05 || b2 > 0.05 || A.burnt("L1") || A.burnt("L2")), "Ninguna lámpara se funde", "A 28 V, una lámpara de 14 V sola se funde: cada una tiene que quedarse con la mitad de la tensión."),
+        ok(b1 >= 0.8 && b1 <= 1.25 && b2 >= 0.8 && b2 <= 1.25, "Las dos lucen a su tensión nominal (unos 14 V cada una)", `Ahora: L1 al ${pct(b1)} y L2 al ${pct(b2)} de su potencia. En serie, las tensiones se suman.`),
+        ok(nom && F.bright("L2") < 0.05, "Si se funde L1, L2 se apaga (están en serie)", "Comprueba que las dos lámparas están una detrás de otra en el mismo camino."),
+        ok(nom && T.bright("L2") < 0.05, "CB1 protege el circuito", "CB1 tiene que estar en serie con las lámparas."),
+        sinAverias(A, "", nom),
+      ];
+    },
+  },
+  {
+    id: "medir", titulo: "Mide como en el taller", ce: "RA2 · CE g",
+    contexto: "El circuito de la luz de navegación de cola ya está montado y funciona. El jefe de turno quiere saber cuánta corriente consume y qué tensión le llega.",
+    objetivo: "Añade un amperímetro y un voltímetro para medir la intensidad y la tensión de la lámpara L1, sin que deje de lucir.",
+    piezas: [P("bateria", "BAT1", 100, 300, 90, { v: "24" }), masaBajo(100, 300), P("disyuntor", "CB1", 220, 220, 0, { In: "5" }), P("interruptor", "S1", 380, 220, 0, {}, { on: true }),
+      P("lampara", "L1", 680, 300, 90, { spec: "28-25" }), masaBajo(680, 300)],
+    cables: [["BAT1", 0, "CB1", 0], ["CB1", 1, "S1", 0], ["S1", 1, "L1", 0]],
+    check: (comps, wires) => {
+      const A = runCase(comps, wires, on);
+      const IL = A.I("L1"), VL = A.V("L1");
+      const am = A.of("amperimetro").filter(c => !c.st.burnt), vm = A.of("voltimetro");
+      const goodA = am.some(c => Math.abs(Math.abs(A.I(c)) - Math.abs(IL)) <= 0.03 * Math.abs(IL) + 1e-4);
+      const goodV = vm.some(c => Math.abs(Math.abs(A.V(c)) - Math.abs(VL)) <= 0.03 * Math.abs(VL) + 0.01);
+      return [
+        ok(A.bright("L1") >= 0.5, "La lámpara sigue luciendo", "Si la lámpara se apaga, has abierto el circuito sin volver a cerrarlo con el amperímetro."),
+        ok(has(comps, "amperimetro") && !A.of("amperimetro").some(c => c.st.burnt), "El amperímetro no se ha fundido", "Un amperímetro en paralelo es un cortocircuito: se conecta en serie."),
+        ok(goodA, "El amperímetro mide la intensidad de L1 (está en serie)", "Quita un cable del camino de la lámpara y cierra el hueco con el amperímetro."),
+        ok(goodV, "El voltímetro mide la tensión de L1 (está en paralelo)", "Conecta el voltímetro entre los dos terminales de la lámpara, sin quitar ningún cable."),
+        sinAverias(A, "", A.bright("L1") >= 0.5),
+      ];
+    },
+  },
+  {
+    id: "serieBat", titulo: "24 V con dos baterías de 12 V", ce: "RA2 · CE f",
+    contexto: "Para probar en el banco una lámpara de 24 V · 10 W solo tienes dos baterías de 12 V.",
+    objetivo: "Asocia las baterías para obtener 24 V y alimenta la lámpara a través de CB1.",
+    piezas: [P("bateria", "BAT1", 100, 200, 90, { v: "12" }), P("bateria", "BAT2", 100, 380, 90, { v: "12" }), masaBajo(100, 380), P("disyuntor", "CB1", 300, 140, 0, { In: "5" }),
+      P("lampara", "L1", 640, 300, 90, { spec: "24-10" }), masaBajo(640, 300)],
+    check: (comps, wires) => {
+      const A = runCase(comps, wires), T = runCase(comps, wires, tripAll);
+      const i1 = A.I("BAT1"), i2 = A.I("BAT2"), b = A.bright("L1");
+      return [
+        ok(b >= 0.8 && b <= 1.25, "La lámpara luce a su tensión nominal de 24 V", `Ahora luce al ${pct(b)}. En serie, las tensiones de las baterías se suman: el − de una va al + de la otra.`),
+        ok(i1 < -0.05 && i2 < -0.05 && Math.abs(i1 - i2) < 0.02 * Math.abs(i1) + 0.005, "Las dos baterías dan la misma corriente (están en serie)", "En serie la corriente es la misma en todo el circuito."),
+        ok(b >= 0.8 && T.bright("L1") < 0.05, "CB1 protege la lámpara", "CB1 tiene que estar en serie."),
+        sinAverias(A, "", b >= 0.8),
+      ];
+    },
+  },
+  {
+    id: "paraleloBat", titulo: "Más autonomía: baterías en paralelo", ce: "RA2 · CE f",
+    contexto: "Para que el banco de pruebas aguante más tiempo encendido se usan dos baterías de 24 V a la vez. Las lámparas son de 24 V.",
+    objetivo: "Conecta las dos baterías de forma que la tensión siga siendo 24 V y cada una dé la mitad de la corriente. Ojo con la polaridad.",
+    piezas: [P("bateria", "BAT1", 100, 300, 90, { v: "24" }), masaBajo(100, 300), P("bateria", "BAT2", 220, 300, 90, { v: "24" }), masaBajo(220, 300), P("disyuntor", "CB1", 380, 180, 0, { In: "5" }),
+      P("lampara", "L1", 620, 300, 90, { spec: "24-10" }), masaBajo(620, 300), P("lampara", "L2", 740, 300, 90, { spec: "24-10" }), masaBajo(740, 300)],
+    check: (comps, wires) => {
+      const A = runCase(comps, wires);
+      const i1 = -A.I("BAT1"), i2 = -A.I("BAT2"), tot = i1 + i2, lit = ["L1", "L2"].every(id => A.bright(id) >= 0.5);
+      return [
+        ok(["L1", "L2"].every(id => A.bright(id) >= 0.8 && A.bright(id) <= 1.25), "Las dos lámparas lucen a 24 V", "Si lucen el doble, las baterías están en serie; si no lucen, falta un camino a masa."),
+        ok(tot > 0.1 && i1 > 0.3 * tot && i2 > 0.3 * tot, "Cada batería da más o menos la mitad de la corriente (están en paralelo)", "En paralelo se unen los + entre sí y los − entre sí."),
+        ok(lit && !A.ev.some(e => /Cortocircuito/.test(e.msg)), "No hay cortocircuito entre las baterías", "Si unes el + de una con el − de la otra en paralelo, hay un cortocircuito."),
+        sinAverias(A, "", lit),
+      ];
+    },
+  },
+  {
+    id: "rele", titulo: "La bomba hidráulica con relé", ce: "RA2 · CE c, d, k",
+    contexto: "La bomba hidráulica consume más de 7 A: el interruptor de cabina no puede llevar esa corriente. Se manda con el relé K1.",
+    objetivo: "S1 excita la bobina de K1 y el contacto de K1 alimenta la bomba M1. Protege el circuito de mando y el de potencia con un disyuntor cada uno.",
+    piezas: [P("generador", "G1", 100, 300, 90, { tipo: "cc28" }), masaBajo(100, 300), P("interruptor", "S1", 300, 400, 0), P("rele", "K1", 520, 440, 90, { K: "K1", v: "28" }), masaBajo(520, 440),
+      P("contacto_na", "K1", 520, 180, 0, { K: "K1" }), P("motor", "M1", 760, 300, 90, { spec: "28-200" }), masaBajo(760, 300)],
+    check: (comps, wires) => {
+      const A = runCase(comps, wires, on), B = runCase(comps, wires, off), T = runCase(comps, wires, h => { on(h); tripAll(h); });
+      const s1 = A.of("interruptor").find(c => c.name === "S1");
+      const nCB = comps.filter(c => c.t === "disyuntor").length;
+      return [
+        ok(A.bright("M1") >= 0.7, "Con S1 cerrado, la bomba funciona", "Sigue el camino: generador → disyuntor → contacto de K1 → motor → masa, y aparte S1 → bobina de K1 → masa."),
+        ok(A.bright("M1") >= 0.7 && B.bright("M1") < 0.05, "Con S1 abierto, la bomba se para", "La bomba solo debe recibir corriente a través del contacto de K1."),
+        ok(s1 && Math.abs(A.I(s1)) < 0.5 && A.bright("M1") >= 0.7, "Por S1 solo pasa la corriente de la bobina (menos de 0,5 A)", "S1 no debe estar en el camino de la bomba: solo manda la bobina del relé."),
+        ok(nCB >= 2 && A.bright("M1") >= 0.7 && T.bright("M1") < 0.05, "Hay un disyuntor para el mando y otro para la bomba", nCB < 2 ? "Faltan disyuntores: uno para el circuito de la bobina y otro para el de la bomba." : "Algún disyuntor no está en serie con su circuito."),
+        sinAverias(A, " (el disyuntor de la bomba debe ser de más de 7,2 A)", A.bright("M1") >= 0.05 || A.burntList().length > 0),
+      ];
+    },
+  },
+  {
+    id: "conmutador", titulo: "Rodaje o aterrizaje", ce: "RA2 · CE c, h",
+    contexto: "Un conmutador de cabina elige entre la luz de rodaje (28 V · 25 W) y la de aterrizaje (28 V · 250 W), que consume mucho más.",
+    objetivo: "En la posición 1 luce solo la de rodaje (L1); en la posición 2, solo la de aterrizaje (L2). Añade una protección adecuada.",
+    piezas: [P("bateria", "BAT1", 100, 300, 90, { v: "24" }), masaBajo(100, 300), P("conmutador", "S1", 400, 200, 0),
+      P("lampara", "L1", 640, 300, 90, { spec: "28-25" }), masaBajo(640, 300), P("lampara", "L2", 780, 300, 90, { spec: "28-250" }), masaBajo(780, 300)],
+    check: (comps, wires) => {
+      const p1 = runCase(comps, wires, h => setAll(h, "conmutador", c => c.st.pos = 1)), p2 = runCase(comps, wires, h => setAll(h, "conmutador", c => c.st.pos = 2));
+      const T = runCase(comps, wires, h => { setAll(h, "conmutador", c => c.st.pos = 2); tripAll(h); });
+      return [
+        ok(p1.bright("L1") >= 0.5 && p1.bright("L2") < 0.05, "Posición 1: luce solo la de rodaje (L1)", "La salida 1 del conmutador va a L1."),
+        ok(p2.bright("L2") >= 0.5 && p2.bright("L1") < 0.05, "Posición 2: luce solo la de aterrizaje (L2)", "La salida 2 del conmutador va a L2."),
+        ok((has(comps, "disyuntor") || has(comps, "fusible")) && p2.bright("L2") >= 0.5 && T.bright("L2") < 0.05, "Hay una protección en serie con las luces", "Pon un disyuntor entre la batería y el común del conmutador."),
+        sinAverias(p2, " con la de aterrizaje encendida (consume unos 7,6 A)", p2.bright("L2") >= 0.05 || p2.burntList().length > 0),
+      ];
+    },
+  },
+  {
+    id: "led", titulo: "El testigo LED", ce: "RA2 · CE b, i",
+    contexto: "Hay que poner un testigo LED verde en el panel, alimentado a 24 V. Un LED necesita unos 2 V y entre 10 y 20 mA.",
+    objetivo: "Elige la resistencia en serie (valor y potencia) para que el LED luzca con 8–20 mA sin que nada se queme ni se caliente.",
+    piezas: [P("bateria", "BAT1", 100, 300, 90, { v: "24" }), masaBajo(100, 300), P("interruptor", "S1", 300, 200, 0), P("led", "LED1", 660, 300, 90, { col: "verde" }), masaBajo(660, 300)],
+    check: (comps, wires) => {
+      const A = runCase(comps, wires, on), B = runCase(comps, wires, off);
+      const iL = Math.abs(A.I("LED1"));
+      const rs = A.of("resistencia");
+      const calientes = rs.filter(c => A.sim.prim(c, "main").p > +c.p.pw * 1.001);
+      return [
+        ok(!A.burnt("LED1") && iL > 0.001, "El LED no se quema", "Sin resistencia, o con una muy pequeña, pasa demasiada corriente."),
+        ok(iL >= 0.008 && iL <= 0.02, "Por el LED pasan entre 8 y 20 mA", `Ahora pasan ${siFmt(iL, "A", 1)}. R = (24 − 2,1) / I.`),
+        ok(rs.length && !calientes.length && !rs.some(c => c.st.burnt), "La resistencia aguanta la potencia que disipa", calientes.length ? `Disipa ${siFmt(A.sim.prim(calientes[0], "main").p, "W", 2)}: elige una de más potencia (P = I² · R).` : "Falta la resistencia en serie."),
+        ok(iL > 0.001 && Math.abs(B.I("LED1")) < 0.0005, "Con S1 abierto, el LED se apaga", "S1 tiene que estar en serie."),
+      ];
+    },
+  },
+  {
+    id: "rc", titulo: "La carga del condensador", ce: "RA2 · CE i, j",
+    contexto: "En la práctica 11 del taller se carga un condensador de 1000 µF con una batería de 12 V. La constante de tiempo es τ = R · C.",
+    objetivo: "Añade la resistencia de carga para que τ esté entre 0,8 y 1,5 s, y conecta el voltímetro V1 para ver cómo sube la tensión del condensador.",
+    piezas: [P("bateria", "BAT1", 100, 300, 90, { v: "12" }), masaBajo(100, 300), P("interruptor", "S1", 260, 200, 0), P("electrolitico", "C1", 620, 300, 90, { C: "1e-3", vmax: "35" }), masaBajo(620, 300),
+      P("voltimetro", "V1", 760, 300, 90)],
+    check: (comps, wires) => {
+      const cl = freshCopy(comps); cl.filter(c => c.t === "interruptor").forEach(c => c.st.on = true);
+      const sim = new Sim(cl, wires); EVENTS.length = 0;
+      const C1 = cl.find(c => c.name === "C1"), V1 = cl.find(c => c.name === "V1"), pc = sim.prim(C1, "main");
+      let t63 = null; const n = Math.ceil(8 / sim.dt);
+      for (let i = 0; i < n; i++) { sim.step(); if (t63 === null && pc.v >= 0.632 * 12) t63 = sim.t; }
+      const vf = pc.v, vm = sim.prim(V1, "main").va;
+      return [
+        ok(!C1.st.burnt && Math.abs(vf) > 1, "El condensador electrolítico está bien conectado (+ hacia el positivo)", "El terminal + del electrolítico va hacia el + de la batería."),
+        ok(t63 !== null && t63 >= 0.8 && t63 <= 1.5, "La constante de tiempo está entre 0,8 y 1,5 s", t63 === null ? "El condensador no llega a cargarse: revisa el camino batería → S1 → R → C1 → masa." : `Ahora τ ≈ ${fmtN(t63, 2)} s. Con C = 1000 µF, τ = R · C.`),
+        ok(vf > 11.5, "Al final el condensador queda cargado a unos 12 V", "Si se queda por debajo, algo en paralelo le está quitando corriente."),
+        ok(vf > 1 && Math.abs(vm - vf) < 0.3, "V1 mide la tensión del condensador", "Conecta V1 en paralelo con C1, con su + hacia el + del condensador."),
+      ];
+    },
+  },
+  {
+    id: "tr", titulo: "El TR alimenta la barra de continua", ce: "RA2 · CE h",
+    contexto: "Con los motores en marcha, el alternador da 115 V de alterna a 400 Hz. Los equipos de 28 V de continua se alimentan desde la DC BUS a través del TR.",
+    objetivo: "Lleva la alterna del alternador al TR, conecta la salida del TR a la DC BUS y alimenta desde la barra la lámpara L1 con su propio disyuntor.",
+    piezas: [P("generador", "G1", 100, 300, 90, { tipo: "ca115" }), masaBajo(100, 300), P("tr", "TR1", 320, 300, 0), P("barra", "DC BUS", 560, 160, 0, { bus: "DC BUS" }),
+      P("lampara", "L1", 760, 320, 90, { spec: "28-25" }), masaBajo(760, 320)],
+    check: (comps, wires) => {
+      const A = runCase(comps, wires, null, 0.4), T = runCase(comps, wires, tripAll, 0.4);
+      const bus = A.byId(comps.find(c => c.name === "DC BUS").id), vb = A.sim.nodeV(bus, 0);
+      const vbT = T.sim.nodeV(T.byId(bus.id), 0);
+      return [
+        ok(vb > 25 && vb < 31, "La DC BUS está a unos 28 V de continua", `Ahora la barra está a ${fmtN(vb, 1)} V. El TR solo funciona con alterna en su entrada (~) y su salida + va a la barra; el − a masa.`),
+        ok(A.bright("L1") >= 0.8, "L1 luce alimentada desde la barra", "Une un punto de la barra con la protección y la lámpara."),
+        ok((has(comps, "disyuntor") || has(comps, "fusible")) && A.bright("L1") >= 0.8 && T.bright("L1") < 0.05 && vbT > 25, "L1 tiene su propio disyuntor entre la barra y la lámpara", "La protección va después de la barra: si salta, la barra sigue alimentando al resto de equipos."),
+        sinAverias(A, "", vb > 25),
+      ];
+    },
+  },
+  {
+    id: "trafo", titulo: "La luz de instrumentos de 26 V", ce: "RA2 · CE b, h",
+    contexto: "Las luces de los instrumentos funcionan con 26 V de alterna. La red del avión da 115 V de alterna a 400 Hz.",
+    objetivo: "Usa el transformador T1 para alimentar la lámpara de 26 V · 5 W sin fundirla.",
+    piezas: [P("generador", "G1", 100, 300, 90, { tipo: "ca115" }), P("transformador", "T1", 380, 300, 0, { rel: "115-26" }), P("lampara", "L1", 660, 300, 90, { spec: "26-5" })],
+    check: (comps, wires) => {
+      const A = runCase(comps, wires, null, 0.4);
+      const b = A.bright("L1");
+      return [
+        ok(!A.burnt("L1") && b > 0.05, "La lámpara no se funde", "Si la conectas directamente a 115 V, se funde: tiene que ir en el secundario."),
+        ok(b >= 0.8 && b <= 1.25, "La lámpara luce a su tensión nominal (26 V)", `Ahora luce al ${pct(b)}. El primario del transformador va al generador y la lámpara al secundario.`),
+        sinAverias(A, "", b > 0.05),
+      ];
+    },
+  },
+];
+
+/* construye las piezas de un reto con identificadores fijos y sus cables de partida */
+function piezasDe(m) {
+  const comps = m.piezas.map((q, i) => { const c = newComp(q.t, q.x, q.y, q.r, m.id + "_" + i); Object.assign(c.p, q.p); Object.assign(c.st, q.st); c.name = q.name; c.lock = true; return c; });
+  const wires = (m.cables || []).map(([a, pa, b, pb]) => ({ a: { c: comps.find(c => c.name === a).id, p: pa }, b: { c: comps.find(c => c.name === b).id, p: pb }, bend: "h" }));
+  return { comps, wires };
+}
+// @@MISIONES-FIN
+
+/* ===== Interfaz ===== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+const KEY = "tallerCircuitosUD2.v1";
+const SN = 20;
+const snap = v => Math.round(v / SN) * SN;
+
+const ST = { mode: "libre", mi: 0, comps: [], wires: [], sel: null, view: { x: 40, y: 30, z: 1 }, run: true, sound: true, done: {}, drafts: {}, libre: null, results: null, hist: [] };
+let SIM = null, LOG = [];
+
+/* ---------- guardar ---------- */
+function persist() {
+  stash();
+  try { localStorage.setItem(KEY, JSON.stringify({ mode: ST.mode, mi: ST.mi, done: ST.done, drafts: ST.drafts, libre: ST.libre, sound: ST.sound })); } catch (e) { }
+}
+function stash() {
+  const data = { comps: ST.comps.map(c => ({ ...c, st: { on: c.st.on, pos: c.st.pos } })), wires: ST.wires };
+  if (ST.mode === "libre") ST.libre = data; else ST.drafts[MISIONES[ST.mi].id] = data;
+}
+function restoreData(d) {
+  const comps = d.comps.filter(c => DEFS[c.t]).map(c => { const n = { ...c, p: { ...c.p }, st: {} }; const def = DEFS[c.t]; if (def.init) def.init(n); if (c.st && c.st.on !== undefined) n.st.on = c.st.on; if (c.st && c.st.pos) n.st.pos = c.st.pos; for (const pr of def.params) if (n.p[pr.k] === undefined) n.p[pr.k] = pr.def; return n; });
+  const ids = new Set(comps.map(c => c.id));
+  return { comps, wires: d.wires.filter(w => ids.has(w.a.c) && ids.has(w.b.c)) };
+}
+
+/* ---------- nombres ---------- */
+function nextName(t) {
+  const pre = DEFS[t].pre; if (!pre) return "";
+  const used = new Set(ST.comps.map(c => c.name));
+  for (let i = 1; ; i++) if (!used.has(pre + i)) return pre + i;
+}
+const labelOf = c => DEFS[c.t].label ? DEFS[c.t].label(c) : (c.name || "");
+
+/* ---------- geometría ---------- */
+function localBox(t) {
+  const d = DEFS[t]; let x0 = -26, x1 = 26, y0 = -26, y1 = 26;
+  for (const [x, y] of d.pins) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  if (t === "polimetro") { y0 = -38; }
+  if (t === "barra") { x0 = -72; x1 = 72; y0 = -12; y1 = 12; }
+  if (t === "masa") { y0 = -20; y1 = 20; x0 = -18; x1 = 18; }
+  if (t === "union") { x0 = -8; x1 = 8; y0 = -8; y1 = 8; }
+  return [x0, y0, x1, y1];
+}
+function worldBox(c) {
+  const [x0, y0, x1, y1] = localBox(c.t);
+  const pts = [[x0, y0], [x1, y0], [x0, y1], [x1, y1]].map(p => rotP(p, c.r || 0));
+  const xs = pts.map(p => p[0] + c.x), ys = pts.map(p => p[1] + c.y);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+function wirePath(w) {
+  const A = ST.comps.find(c => c.id === w.a.c), B = ST.comps.find(c => c.id === w.b.c);
+  if (!A || !B) return "";
+  const [ax, ay] = pinPos(A, w.a.p), [bx, by] = pinPos(B, w.b.p);
+  return w.bend === "v" ? `M${ax} ${ay} V${by} H${bx}` : `M${ax} ${ay} H${bx} V${by}`;
+}
+
+/* ---------- dibujo ---------- */
+function compSvg(c) {
+  const d = DEFS[c.t];
+  const [x0, y0, x1, y1] = localBox(c.t);
+  const sel = ST.sel && ST.sel.c === c.id ? " sel" : "";
+  const cls = `comp${sel}${c.st.burnt ? " burnt" : ""}${c.st.hot ? " hot" : ""}`;
+  let s = `<g class="${cls}" data-cid="${c.id}"><g transform="translate(${c.x} ${c.y}) rotate(${c.r || 0})"><rect class="hit" x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" rx="6"/>${d.draw(c, SIM)}</g>`;
+  const used = usedPins();
+  d.pins.forEach((_, i) => { const [x, y] = pinPos(c, i); s += `<circle class="pinhit" data-cid="${c.id}" data-pin="${i}" cx="${x}" cy="${y}" r="11"/><circle class="pin${used.has(c.id + ":" + i) ? " used" : ""}" cx="${x}" cy="${y}" r="3.6" pointer-events="none"/>`; });
+  const [bx0, by0, bx1, by1] = worldBox(c);
+  const lab = labelOf(c);
+  if (lab) s += `<text class="lbl${c.lock ? " lock" : ""}" x="${(bx0 + bx1) / 2}" y="${by0 - 5}" text-anchor="middle">${esc(lab)}</text>`;
+  if (d.meter && c.t !== "polimetro") s += `<g class="badge" transform="translate(${(bx0 + bx1) / 2} ${by1 + 14})"><rect x="-38" y="-11" width="76" height="18" rx="3"/><text x="0" y="3" text-anchor="middle" data-read="${c.id}">—</text></g>`;
+  if (c.t === "polimetro") s += `<g class="badge" transform="translate(${(bx0 + bx1) / 2} ${by0 - 22})"><rect x="-46" y="-11" width="92" height="18" rx="3"/><text x="0" y="3" text-anchor="middle" data-read="${c.id}">—</text></g>`;
+  return s + `</g>`;
+}
+let USED = null;
+function usedPins() { if (!USED) { USED = new Set(); for (const w of ST.wires) { USED.add(w.a.c + ":" + w.a.p); USED.add(w.b.c + ":" + w.b.p); } } return USED; }
+function wireSvg(w, i) {
+  const d = wirePath(w); const sel = ST.sel && ST.sel.w === i ? " sel" : "";
+  return `<g class="wire${sel}" data-wid="${i}"><path class="whit" d="${d}"/><path class="wl" d="${d}" style="stroke:var(--ink)"/><path class="wf" d="${d}"/></g>`;
+}
+function renderJunctions() {
+  const cnt = new Map();
+  for (const w of ST.wires) for (const e of [w.a, w.b]) { const k = e.c + ":" + e.p; cnt.set(k, (cnt.get(k) || 0) + 1); }
+  let s = "";
+  for (const [k, n] of cnt) if (n >= 2) { const [cid, p] = k.split(":"); const c = ST.comps.find(x => x.id === cid); if (c && c.t !== "union") { const [x, y] = pinPos(c, +p); s += `<circle class="jdot" cx="${x}" cy="${y}" r="4.5"/>`; } }
+  $("#jdots").innerHTML = s;
+}
+const SIG = new Map();
+function sigOf(c) { const st = c.st; return [st.on, st.pos, st.burnt, st.hot, (c.t === "contacto_na" || c.t === "contacto_nc") && SIM ? SIM.relayOn(c.p.K) : 0, ST.sel && ST.sel.c === c.id].join("|"); }
+function renderAll() {
+  USED = null;
+  $("#wires").innerHTML = ST.wires.map(wireSvg).join("");
+  $("#comps").innerHTML = ST.comps.map(compSvg).join("");
+  renderJunctions();
+  SIG.clear(); for (const c of ST.comps) SIG.set(c.id, sigOf(c));
+  cacheDyn();
+  renderSide();
+}
+function rerenderComp(c) {
+  const el = document.querySelector(`#comps [data-cid="${c.id}"]`);
+  if (!el) return;
+  el.outerHTML = compSvg(c);
+  SIG.set(c.id, sigOf(c)); cacheDyn();
+}
+function rerenderWires() { USED = null; $("#wires").innerHTML = ST.wires.map(wireSvg).join(""); renderJunctions(); cacheDyn(); }
+function setView() { const v = ST.view; $("#world").setAttribute("transform", `translate(${v.x} ${v.y}) scale(${v.z})`); }
+
+/* ---------- simulación ---------- */
+function rebuild() {
+  const old = SIM;
+  ST.results = null;
+  SIM = new Sim(ST.comps, ST.wires);
+  SIM.carry(old);
+  renderAll();
+  persist();
+}
+let dynCache = null;
+function cacheDyn() {
+  dynCache = {
+    comps: ST.comps.map(c => { const el = document.querySelector(`#comps [data-cid="${c.id}"]`); return { c, el, glow: el && el.querySelector(".glow"), led: el && el.querySelector(".ledbody"), rotor: el && el.querySelector(".rotor"), waves: el && el.querySelector(".waves"), read: el && el.querySelector("[data-read]"), lampbody: el && el.querySelector(".lampbody") }; }),
+    wires: [...document.querySelectorAll("#wires .wire")].map(g => ({ g, wl: g.querySelector(".wl"), wf: g.querySelector(".wf"), ph: 0, abs: 0 })),
+  };
+}
+const LAMPC = { blanca: "#FFD45C", roja: "#FF5A4E", verde: "#3DDC84" };
+const LEDC = { rojo: "#FF3B30", verde: "#22D16B", ambar: "#FFB300" };
+let lastT = performance.now(), lastRead = 0, isDark = false, nodeAbs = new Float64Array(0), audio = null, beepOn = false;
+function themeDark() { const r = document.documentElement.getAttribute("data-theme"); return r ? r === "dark" : matchMedia("(prefers-color-scheme: dark)").matches; }
+function frame(now) {
+  const fdt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  if (SIM && ST.run) {
+    const t0 = performance.now();
+    const n = Math.max(1, Math.min(600, Math.round(fdt / SIM.dt)));
+    for (let i = 0; i < n; i++) { SIM.step(); if ((i & 15) === 15 && performance.now() - t0 > 30) break; }
+    if (EVENTS.length) handleEvents();
+  }
+  if (SIM) updateDyn(fdt);
+  requestAnimationFrame(frame);
+}
+function handleEvents() {
+  const evs = EVENTS.splice(0);
+  for (const e of evs) { toast(`${labelOf(e.c) || DEFS[e.c.t].n}: ${e.msg}`); LOG.unshift(`${labelOf(e.c) || DEFS[e.c.t].n}: ${e.msg}`); }
+  LOG = LOG.slice(0, 6);
+  renderSide(true);
+}
+function updateDyn(fdt) {
+  if (!dynCache) return;
+  isDark = themeDark();
+  const nowR = performance.now(), doRead = nowR - lastRead > 250; // los números se refrescan 4 veces por segundo para poder leerlos
+  if (doRead) lastRead = nowR;
+  let sound = false;
+  for (const o of dynCache.comps) {
+    const c = o.c; if (!o.el) continue;
+    const s = sigOf(c);
+    if (s !== SIG.get(c.id)) { rerenderComp(c); return updateDyn(fdt); }
+    const p = SIM.prim(c, "main");
+    if (!p) continue;
+    if (c.t === "lampara") { const b = c.st.burnt ? 0 : Math.min(1.4, p.p / lampSpec(c).p); o.glow.style.opacity = (Math.min(1, b) * 0.85).toFixed(3); o.glow.style.fill = LAMPC[c.p.col] || LAMPC.blanca; o.lampbody.style.fill = b > 0.05 ? `color-mix(in srgb, ${LAMPC[c.p.col] || LAMPC.blanca} ${Math.round(Math.min(1, b) * 85)}%, var(--sheet))` : ""; }
+    else if (c.t === "led") { const b = c.st.burnt ? 0 : Math.min(1, Math.abs(p.ia) / 0.015); o.led.style.fill = b > 0.03 ? LEDC[c.p.col] : ""; o.led.style.filter = b > 0.03 ? `drop-shadow(0 0 ${3 + 6 * b}px ${LEDC[c.p.col]})` : ""; }
+    else if (c.t === "motor") { const b = p.p / lampSpec(c).p; o.ang = ((o.ang || 0) + Math.sign(p.ia) * Math.min(1, b) * 900 * fdt) % 360; o.rotor.setAttribute("transform", `rotate(${o.ang.toFixed(1)})`); }
+    else if (c.t === "bocina") { const b = p.p / lampSpec(c).p; o.waves.style.opacity = b > 0.2 ? (0.5 + 0.5 * Math.sin(performance.now() / 70)).toFixed(2) : 0; if (b > 0.2) sound = true; }
+    if (o.read && (doRead || o.read.textContent === "—")) { const r = DEFS[c.t].read(c, SIM); o.read.textContent = r; o.beep = c.t === "polimetro" && c.p.m === "cont" && r.startsWith("♪"); }
+    if (o.beep) sound = true;
+  }
+  // cables: color por tensión y trazos según la corriente
+  if (nodeAbs.length !== SIM.N) nodeAbs = new Float64Array(SIM.N);
+  for (let k = 0; k < SIM.N; k++) nodeAbs[k] += (Math.abs(SIM.V[k]) - nodeAbs[k]) * 0.25;
+  const vmax = Math.max(30, ...ST.comps.filter(c => c.t === "generador" || c.t === "bateria").map(c => c.t === "generador" ? genSpec(c).v * 1.1 : +c.p.v * 1.1));
+  const flows = wireFlows();
+  dynCache.wires.forEach((o, i) => {
+    const w = ST.wires[i]; if (!w) return;
+    const nd = SIM.pinNode(w.a.c + ":" + w.a.p);
+    const v = nodeAbs[nd] || 0, f = Math.min(1, v / vmax);
+    const hue = 215 - 190 * f, L = isDark ? 64 : 42, Sx = 25 + 60 * Math.min(1, f * 3);
+    o.wl.style.stroke = `hsl(${hue.toFixed(0)} ${Sx.toFixed(0)}% ${L}%)`;
+    const fl = flows[i] || { dc: 0, inst: 0 };
+    o.abs += (Math.abs(fl.inst) - o.abs) * 0.2;
+    const mag = Math.max(Math.abs(fl.dc), o.abs);
+    if (mag > 2e-3) {
+      const sp = Math.min(90, 14 + 22 * Math.log10(1 + mag * 200));
+      if (Math.abs(fl.dc) > 0.4 * o.abs || !SIM.acF) o.ph -= Math.sign(fl.dc) * sp * fdt; else o.ph = 4 * Math.sin(performance.now() / 90);
+      o.wf.style.opacity = 0.95; o.wf.style.strokeDashoffset = o.ph.toFixed(1);
+    } else o.wf.style.opacity = 0;
+  });
+  setSound(sound);
+  const st = $("#status");
+  if (st && doRead) st.textContent = `${ST.run ? "" : "PAUSA · "}${SIM.acF ? "CA " + SIM.acF + " Hz" : "CC"} · t = ${fmtN(SIM.t, 1)} s · ${ST.comps.length} piezas · ${ST.wires.length} cables`;
+  if (ST.sel && doRead) updateInspector();
+}
+/* corriente de cada cable: reparto por un árbol de cada nodo (con la corriente media y con la instantánea) */
+function wireFlows() {
+  const res = ST.wires.map(() => ({ dc: 0, inst: 0 }));
+  if (!SIM) return res;
+  const pinIn = new Map();
+  for (const c of ST.comps) {
+    const ps = SIM.byComp.get(c.id) || [];
+    const d = DEFS[c.t];
+    const nodes = d.pins.map((_, i) => SIM.pinNode(c.id + ":" + i));
+    d.pins.forEach((_, i) => {
+      const nd = nodes[i]; let a = 0, b = 0;
+      for (const p of ps) {
+        if (p.k === "K") { if (p.a1 === nd) { a += p.i1; b += p.i1; } if (p.b1 === nd) { a -= p.i1; b -= p.i1; } if (p.a2 === nd) { a += p.i2k; b += p.i2k; } if (p.b2 === nd) { a -= p.i2k; b -= p.i2k; } }
+        else { if (p.a === nd) { a += p.ia; b += p.cur; } if (p.b === nd) { a -= p.ia; b -= p.cur; } }
+      }
+      const share = nodes.filter(x => x === nd).length;
+      pinIn.set(c.id + ":" + i, [a / share, b / share]);
+    });
+  }
+  const adj = new Map(); const add = (u, v, wi, dir) => { if (!adj.has(u)) adj.set(u, []); adj.get(u).push([v, wi, dir]); };
+  ST.wires.forEach((w, i) => { const u = w.a.c + ":" + w.a.p, v = w.b.c + ":" + w.b.p; add(u, v, i, 1); add(v, u, i, -1); });
+  const pos = new Map();
+  for (const c of ST.comps) DEFS[c.t].pins.forEach((_, i) => { const k = pinPos(c, i).join(","); const key = c.id + ":" + i; if (pos.has(k)) { add(key, pos.get(k), -1, 1); add(pos.get(k), key, -1, -1); } else pos.set(k, key); });
+  const seen = new Set();
+  for (const root of adj.keys()) {
+    if (seen.has(root)) continue;
+    const order = [], parent = new Map(); seen.add(root); const st = [root];
+    while (st.length) { const u = st.pop(); order.push(u); for (const [v, wi, dir] of adj.get(u) || []) if (!seen.has(v)) { seen.add(v); parent.set(v, [u, wi, dir]); st.push(v); } }
+    const sum = new Map();
+    for (let k = order.length - 1; k >= 0; k--) {
+      const u = order[k]; const own = pinIn.get(u) || [0, 0]; const s = sum.get(u) || [0, 0];
+      const tot = [s[0] + own[0], s[1] + own[1]];
+      const pr = parent.get(u);
+      if (pr) { const [pu, wi, dir] = pr; if (wi >= 0) { res[wi].dc = dir * tot[0]; res[wi].inst = dir * tot[1]; } const ps = sum.get(pu) || [0, 0]; sum.set(pu, [ps[0] + tot[0], ps[1] + tot[1]]); }
+    }
+  }
+  return res;
+}
+
+/* ---------- sonido (solo tras tocar la página) ---------- */
+let osc = null, gain = null;
+function setSound(onoff) {
+  onoff = onoff && ST.sound;
+  if (!audio) return;
+  if (onoff && !beepOn) { osc = audio.createOscillator(); gain = audio.createGain(); osc.type = "square"; osc.frequency.value = 880; gain.gain.value = 0.04; osc.connect(gain).connect(audio.destination); osc.start(); beepOn = true; }
+  else if (!onoff && beepOn) { try { osc.stop(); } catch (e) { } beepOn = false; }
+}
+
+/* ---------- avisos ---------- */
+function toast(msg, good) {
+  const t = document.createElement("div"); t.className = "toast" + (good ? " good" : ""); t.textContent = msg;
+  $("#toasts").prepend(t); setTimeout(() => t.remove(), 5200);
+  while ($("#toasts").children.length > 3) $("#toasts").lastChild.remove();
+}
+
+/* ---------- historial ---------- */
+function pushHist() { ST.hist.push(JSON.stringify({ comps: ST.comps, wires: ST.wires })); if (ST.hist.length > 60) ST.hist.shift(); }
+function undo() { const h = ST.hist.pop(); if (!h) return toast("No hay nada que deshacer."); const d = JSON.parse(h); ST.comps = d.comps; ST.wires = d.wires; ST.sel = null; rebuild(); }
+
+/* ---------- edición ---------- */
+function addComp(t, x, y) {
+  pushHist();
+  const c = newComp(t, snap(x), snap(y));
+  c.name = nextName(t);
+  ST.comps.push(c); ST.sel = { c: c.id }; rebuild();
+  return c;
+}
+function delSel() {
+  const s = ST.sel; if (!s) return;
+  if (s.c) {
+    const c = ST.comps.find(x => x.id === s.c);
+    if (c && c.lock) return toast("Esta pieza es del reto y no se puede borrar.");
+    pushHist();
+    ST.comps = ST.comps.filter(x => x.id !== s.c); ST.wires = ST.wires.filter(w => w.a.c !== s.c && w.b.c !== s.c);
+  } else if (s.w !== undefined) { pushHist(); ST.wires.splice(s.w, 1); }
+  ST.sel = null; rebuild();
+}
+function rotSel() { const c = selComp(); if (!c) return; pushHist(); c.r = ((c.r || 0) + 90) % 360; rebuild(); }
+function dupSel() { const c = selComp(); if (!c) return; pushHist(); const n = newComp(c.t, c.x + 40, c.y + 40, c.r); Object.assign(n.p, c.p); n.name = nextName(c.t); ST.comps.push(n); ST.sel = { c: n.id }; rebuild(); }
+const selComp = () => ST.sel && ST.sel.c ? ST.comps.find(x => x.id === ST.sel.c) : null;
+function clickComp(c) {
+  const d = DEFS[c.t];
+  if (c.t === "interruptor" || c.t === "conector") c.st.on = !c.st.on;
+  else if (c.t === "conmutador") c.st.pos = c.st.pos === 1 ? 2 : 1;
+  else if (c.t === "disyuntor") { if (c.st.burnt) { c.st.burnt = false; c.st.th = 0; toast(`${labelOf(c)} rearmado.`, true); } else { c.st.burnt = true; toast(`${labelOf(c)} abierto a mano (tócalo otra vez para rearmarlo).`, true); } }
+  else if (c.t === "fusible" && c.st.burnt) { c.st.burnt = false; c.st.th = 0; toast(`Fusible ${labelOf(c)} sustituido.`, true); }
+  else return false;
+  stash(); renderSide(); return true;
+}
+function fixAll() { for (const c of ST.comps) { c.st.burnt = false; c.st.th = 0; c.st.hot = false; } EVENTS.length = 0; toast("Todo reparado: disyuntores rearmados y piezas sustituidas.", true); rebuild(); }
+
+/* ---------- puntero en la lámina ---------- */
+const board = $("#board");
+function toWorld(cx, cy) { const r = board.getBoundingClientRect(); return [(cx - r.left - ST.view.x) / ST.view.z, (cy - r.top - ST.view.y) / ST.view.z]; }
+let drag = null;
+function ensureAudio() { if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audio = null; } } }
+board.addEventListener("pointerdown", e => {
+  ensureAudio();
+  if (e.button > 0) return;
+  e.preventDefault();
+  const [wx, wy] = toWorld(e.clientX, e.clientY);
+  const pinEl = e.target.closest("[data-pin]"), compEl = e.target.closest("[data-cid]"), wireEl = e.target.closest("[data-wid]");
+  try { board.setPointerCapture(e.pointerId); } catch (err) { }
+  if (pinEl) { drag = { kind: "wire", from: { c: pinEl.dataset.cid, p: +pinEl.dataset.pin }, x0: wx, y0: wy }; return; }
+  if (compEl) {
+    const c = ST.comps.find(x => x.id === compEl.dataset.cid); if (!c) return;
+    const changed = !ST.sel || ST.sel.c !== c.id; ST.sel = { c: c.id };
+    if (changed) { renderAllSelection(); }
+    if (c.t === "pulsador") { c.st.on = true; }
+    drag = { kind: "comp", c, ox: c.x, oy: c.y, x0: wx, y0: wy, moved: false, sx: e.clientX, sy: e.clientY };
+    return;
+  }
+  if (wireEl) { ST.sel = { w: +wireEl.dataset.wid }; renderAllSelection(); drag = { kind: "none" }; return; }
+  ST.sel = null; renderAllSelection();
+  drag = { kind: "pan", sx: e.clientX, sy: e.clientY, vx: ST.view.x, vy: ST.view.y }; board.classList.add("panning");
+});
+window.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const [wx, wy] = toWorld(e.clientX, e.clientY);
+  if (drag.kind === "pan") { ST.view.x = drag.vx + e.clientX - drag.sx; ST.view.y = drag.vy + e.clientY - drag.sy; setView(); }
+  else if (drag.kind === "comp") {
+    if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 5) return;
+    if (!drag.moved) { drag.moved = true; pushHist(); }
+    const nx = snap(drag.ox + wx - drag.x0), ny = snap(drag.oy + wy - drag.y0);
+    if (nx !== drag.c.x || ny !== drag.c.y) { drag.c.x = nx; drag.c.y = ny; rerenderComp(drag.c); rerenderWires(); }
+  } else if (drag.kind === "wire") {
+    const A = ST.comps.find(c => c.id === drag.from.c); const [ax, ay] = pinPos(A, drag.from.p);
+    $("#over").innerHTML = `<path class="tmpw" d="M${ax} ${ay} H${wx} V${wy}"/>`;
+  }
+});
+function endDrag(e) {
+  if (!drag) return;
+  const d = drag; drag = null; board.classList.remove("panning");
+  if (d.kind === "wire") {
+    $("#over").innerHTML = "";
+    const [wx, wy] = toWorld(e.clientX, e.clientY);
+    let to = null;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const pe = el && el.closest && el.closest("[data-pin]");
+    if (pe) to = { c: pe.dataset.cid, p: +pe.dataset.pin };
+    else { let best = 16 / ST.view.z; for (const c of ST.comps) DEFS[c.t].pins.forEach((_, i) => { const [x, y] = pinPos(c, i); const dd = Math.hypot(x - wx, y - wy); if (dd < best) { best = dd; to = { c: c.id, p: i }; } }); }
+    if (to && !(to.c === d.from.c && to.p === d.from.p)) {
+      const dup = ST.wires.some(w => (w.a.c === d.from.c && w.a.p === d.from.p && w.b.c === to.c && w.b.p === to.p) || (w.b.c === d.from.c && w.b.p === d.from.p && w.a.c === to.c && w.a.p === to.p));
+      if (!dup) { pushHist(); ST.wires.push({ a: d.from, b: to, bend: "h" }); ST.sel = { w: ST.wires.length - 1 }; rebuild(); }
+    }
+  } else if (d.kind === "comp") {
+    if (d.c.t === "pulsador") { d.c.st.on = false; }
+    if (d.moved) rebuild();
+    else if (clickComp(d.c)) { /* accionado */ }
+  }
+}
+window.addEventListener("pointerup", endDrag);
+window.addEventListener("pointercancel", endDrag);
+board.addEventListener("dblclick", e => { const we = e.target.closest("[data-wid]"); if (we) { const w = ST.wires[+we.dataset.wid]; pushHist(); w.bend = w.bend === "v" ? "h" : "v"; rebuild(); } });
+board.addEventListener("wheel", e => { e.preventDefault(); const f = e.deltaY < 0 ? 1.1 : 1 / 1.1; zoomAt(e.clientX, e.clientY, f); }, { passive: false });
+function zoomAt(cx, cy, f) {
+  const r = board.getBoundingClientRect(); const v = ST.view; const z = Math.min(2.5, Math.max(0.35, v.z * f));
+  const px = cx - r.left, py = cy - r.top; v.x = px - (px - v.x) * z / v.z; v.y = py - (py - v.y) * z / v.z; v.z = z; setView();
+}
+function fit() {
+  if (!ST.comps.length) { ST.view = { x: 40, y: 30, z: 1 }; return setView(); }
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const c of ST.comps) { const [a, b, cc, dd] = worldBox(c); x0 = Math.min(x0, a); y0 = Math.min(y0, b - 30); x1 = Math.max(x1, cc); y1 = Math.max(y1, dd + 30); }
+  const r = board.getBoundingClientRect(); const W = Math.max(200, r.width), H = Math.max(200, r.height);
+  const z = Math.min(1.6, Math.max(0.35, Math.min((W - 60) / (x1 - x0), (H - 110) / (y1 - y0))));
+  ST.view = { z, x: (W - (x1 + x0) * z) / 2, y: (H - (y1 + y0) * z) / 2 + 22 }; setView();
+}
+function renderAllSelection() { for (const c of ST.comps) { if (SIG.get(c.id) !== sigOf(c)) rerenderComp(c); } document.querySelectorAll("#wires .wire").forEach((g, i) => g.classList.toggle("sel", !!(ST.sel && ST.sel.w === i))); renderSide(); }
+
+/* ---------- paleta ---------- */
+function iconSvg(t) {
+  const c = newComp(t, 0, 0); const [x0, y0, x1, y1] = localBox(t);
+  const w = x1 - x0 + 8, h = y1 - y0 + 8;
+  return `<svg viewBox="${x0 - 4} ${y0 - 4} ${w} ${h}" aria-hidden="true">${DEFS[t].draw(c, null)}</svg>`;
+}
+function buildPalette() {
+  $("#pal").innerHTML = CATS.map(([k, name]) => `<div class="grp"><h3>${name}</h3><div class="items">${Object.entries(DEFS).filter(([, d]) => d.cat === k).map(([t, d]) => `<button class="pal" data-t="${t}" title="${esc(d.d)}">${iconSvg(t)}<span>${esc(d.n)}</span></button>`).join("")}</div></div>`).join("");
+  document.querySelectorAll(".pal").forEach(b => b.addEventListener("pointerdown", e => {
+    ensureAudio();
+    e.preventDefault();
+    const t = b.dataset.t; const sx = e.clientX, sy = e.clientY; let gh = null;
+    const mv = ev => {
+      if (!gh && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 6) { gh = document.createElement("div"); gh.className = "dragghost"; gh.innerHTML = iconSvg(t); document.body.appendChild(gh); }
+      if (gh) { gh.style.left = ev.clientX - 45 + "px"; gh.style.top = ev.clientY - 28 + "px"; }
+    };
+    const up = ev => {
+      window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
+      if (gh) { gh.remove(); const r = board.getBoundingClientRect(); if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) { const [wx, wy] = toWorld(ev.clientX, ev.clientY); addComp(t, wx, wy); } }
+      else { const r = board.getBoundingClientRect(); const n = ST.comps.length % 5; const [wx, wy] = toWorld(r.left + r.width / 2 + n * 20, r.top + r.height / 2 + n * 20); addComp(t, wx, wy); }
+    };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+  }));
+}
+
+/* ---------- panel lateral ---------- */
+function renderSide(keepScroll) {
+  const side = $("#side"); const sc = side.scrollTop;
+  let h = "";
+  if (ST.mode === "reto") h += missionCard();
+  else h += `<div class="card"><span class="eyebrow">Taller libre</span><h2>Monta lo que quieras</h2><p>Usa cualquier componente de la UD2, cámbiale los valores y comprueba lo que pasa: lámparas en serie o en paralelo, relés, el TR, condensadores, diodos, medidas con el polímetro…</p>
+    <span class="eyebrow">Ejemplos para empezar</span><div class="exs"><button class="btn ghost" data-ex="lectura">Luz de lectura con medidas</button><button class="btn ghost" data-ex="rele">Bomba con relé</button><button class="btn ghost" data-ex="rect">Rectificador de media onda</button></div></div>`;
+  h += `<div class="card insp" id="insp">${inspectorHtml()}</div>`;
+  if (LOG.length) h += `<div class="card"><span class="eyebrow">Lo que ha pasado</span><div class="log">${LOG.map(x => `<div>${esc(x)}</div>`).join("")}</div></div>`;
+  side.innerHTML = h;
+  if (keepScroll) side.scrollTop = sc;
+  bindSide();
+  const done = MISIONES.filter(m => ST.done[m.id]).length;
+  $("#progTab").textContent = `${done}/${MISIONES.length}`;
+}
+function missionCard() {
+  const m = MISIONES[ST.mi];
+  const res = ST.results;
+  const list = MISIONES.map((x, i) => `<button class="${i === ST.mi ? "cur" : ""} ${ST.done[x.id] ? "done" : ""}" data-mi="${i}" title="${esc(x.titulo)}${ST.done[x.id] ? " (superado)" : ""}">${i + 1}</button>`).join("");
+  let checks = "";
+  if (res) checks = `<ul class="checks">${res.map(r => `<li class="${r.ok ? "ok" : "no"}"><span class="mk">${r.ok ? "✓" : "✗"}</span><span>${esc(r.txt)}${!r.ok && r.hint ? `<span class="h">${esc(r.hint)}</span>` : ""}</span></li>`).join("")}</ul>`;
+  const allOk = res && res.every(r => r.ok);
+  return `<div class="card"><div class="row" style="justify-content:space-between;align-items:center"><span class="eyebrow">Reto ${ST.mi + 1} de ${MISIONES.length} · ${esc(m.ce)}</span></div>
+    <div class="mlist">${list}</div>
+    <h2>${esc(m.titulo)}</h2><p>${esc(m.contexto)}</p><p class="goal">${esc(m.objetivo)}</p>
+    <div class="row"><button class="btn gold" id="bCheck">Comprobar</button><button class="btn ghost" id="bReset">Empezar de nuevo</button>${ST.mi < MISIONES.length - 1 ? `<button class="btn ghost" id="bNext">Siguiente</button>` : ""}</div>
+    ${allOk ? `<div class="banner">Reto superado</div>` : ""}${checks}
+    <p class="muted">Las piezas con el nombre en azul oscuro son del reto y no se pueden borrar. Añade lo que falte desde la caja de componentes.</p></div>`;
+}
+function inspectorHtml() {
+  const s = ST.sel;
+  if (!s) return `<span class="eyebrow">Inspector</span><p class="muted">Toca una pieza o un cable para ver sus valores y su tensión, intensidad y potencia. Para unir dos piezas, arrastra desde un terminal hasta otro.</p>`;
+  if (s.w !== undefined) {
+    const w = ST.wires[s.w]; if (!w) return "";
+    return `<span class="eyebrow">Cable</span><dl id="inspvals"></dl><div class="row"><button class="btn ghost" id="bBend">Cambiar el codo</button><button class="btn ghost" id="bDelW">Borrar cable</button></div>`;
+  }
+  const c = selComp(); if (!c) return "";
+  const d = DEFS[c.t];
+  const params = d.params.map(pr => pr.slider
+    ? `<label>${esc(pr.l)}: <b id="pv_${pr.k}">${Math.round(c.p[pr.k] * 100)} %</b><input type="range" id="pp_${pr.k}" min="0" max="1" step="0.01" value="${c.p[pr.k]}" ${c.lock ? "disabled" : ""}></label>`
+    : `<label>${esc(pr.l)}<select id="pp_${pr.k}" ${c.lock && c.t !== "polimetro" ? "disabled" : ""}>${pr.o.map(([v, t]) => `<option value="${esc(v)}" ${String(c.p[pr.k]) === String(v) ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`).join("");
+  let acts = "";
+  if (c.t === "interruptor" || c.t === "conector") acts += `<button class="btn" data-act="tog">${c.t === "conector" ? (c.st.on ? "Desconectar" : "Conectar") : (c.st.on ? "Abrir" : "Cerrar")}</button>`;
+  if (c.t === "conmutador") acts += `<button class="btn" data-act="tog">Pasar a la posición ${c.st.pos === 1 ? 2 : 1}</button>`;
+  if (c.t === "disyuntor") acts += `<button class="btn" data-act="tog">${c.st.burnt ? "Rearmar" : "Abrir a mano"}</button>`;
+  if (c.st.burnt && c.t !== "disyuntor") acts += `<button class="btn" data-act="fix">${c.t === "fusible" ? "Cambiar el fusible" : c.t === "lampara" ? "Cambiar la lámpara" : "Sustituir la pieza"}</button>`;
+  acts += `<button class="btn ghost" data-act="rot">Girar</button>${c.lock ? "" : `<button class="btn ghost" data-act="dup">Duplicar</button><button class="btn ghost" data-act="del">Borrar</button>`}`;
+  const pins = d.pinN ? `<p class="muted">Terminales: ${d.pins.map((_, i) => esc(d.pinN[i])).join(" · ")}</p>` : "";
+  return `<span class="eyebrow">${esc(d.n)}${c.lock ? " · pieza del reto" : ""}</span><h2>${esc(labelOf(c) || d.n)}</h2><p>${esc(d.d)}</p>${pins}${params}<dl id="inspvals"></dl><div class="row">${acts}</div>`;
+}
+function updateInspector() {
+  const dl = $("#inspvals"); if (!dl || !SIM) return;
+  const s = ST.sel; let rows = [];
+  if (s.w !== undefined) {
+    const w = ST.wires[s.w]; if (!w) return;
+    const nd = SIM.pinNode(w.a.c + ":" + w.a.p); const fl = wireFlows()[s.w] || { dc: 0 };
+    rows = [["Tensión respecto a masa", SIM.acF ? siFmt(nodeAbs[nd] || 0, "V", 2) + " (media del valor)" : siFmt(SIM.V[nd], "V", 2)], ["Intensidad", siFmt(Math.abs(fl.dc), "A", 2)]];
+  } else {
+    const c = selComp(); if (!c) return; const p = SIM.prim(c, "main");
+    if (p) {
+      const rmsV = Math.sqrt(Math.max(0, p.v2)), rmsI = Math.sqrt(Math.max(0, p.i2));
+      if (["masa", "union", "barra", "antena"].includes(c.t)) rows.push(["Tensión respecto a masa", siFmt(SIM.nodeV(c, 0), "V", 2)]);
+      else if (c.t === "transformador") { const q = SIM.prim(c, "sec"); rows.push(["Corriente del primario (ef.)", siFmt(rmsI, "A", 2)], ["Corriente del secundario (ef.)", siFmt(Math.sqrt(q.i2), "A", 2)]); }
+      else if (c.t === "tr") rows.push(["Alterna en la entrada (ef.)", siFmt(c.st.vin || 0, "V", 1)], ["Salida", siFmt(p.va, "V", 2)], ["Corriente de salida", siFmt(Math.abs(p.ia), "A", 2)]);
+      else {
+        if (SIM.acF) {
+          rows.push(["Tensión eficaz", siFmt(rmsV, "V", 2)], ["Tensión media (continua)", siFmt(Math.abs(p.va) < 0.01 * rmsV ? 0 : p.va, "V", 2)]);
+          rows.push(["Intensidad eficaz", siFmt(rmsI, "A", 2)], ["Intensidad media (continua)", siFmt(Math.abs(p.ia) < 0.01 * rmsI ? 0 : p.ia, "A", 2)]);
+        } else {
+          rows.push(["Tensión entre sus terminales", siFmt(p.va, "V", 2)], ["Intensidad", siFmt(p.ia, "A", 3)]);
+        }
+        rows.push([c.t === "bateria" || c.t === "pila" || c.t === "generador" ? "Potencia que entrega" : "Potencia", siFmt(p.p, "W", 2)]);
+      }
+      if (c.t === "lampara") rows.push(["Brillo", c.st.burnt ? "fundida" : Math.round(100 * p.p / lampSpec(c).p) + NB + "%"]);
+      if (c.t === "motor") rows.push(["Funcionamiento", p.p / lampSpec(c).p > 0.7 ? (p.ia >= 0 ? "gira (sentido normal)" : "gira al revés") : p.p > 0.5 ? "gira despacio" : "parado"]);
+      if (c.t === "rele") rows.push(["Estado", c.st.act ? "excitado (contactos cambiados)" : "en reposo"]);
+      if (c.t === "contacto_na" || c.t === "contacto_nc") rows.push(["Contacto", (SIM.relayOn(c.p.K) === (c.t === "contacto_na")) ? "cerrado" : "abierto"]);
+      if (c.t === "disyuntor" || c.t === "fusible") rows.push(["Estado", c.st.burnt ? (c.t === "fusible" ? "fundido" : "saltado / abierto") : `normal · carga ${Math.round(100 * Math.abs(p.ia) / +c.p.In)} %`]);
+      if (DEFS[c.t].read) rows.push(["Lectura", DEFS[c.t].read(c, SIM)]);
+      if (c.st.hot) rows.push(["Aviso", "se está calentando: trabaja por encima de lo que admite"]);
+    }
+  }
+  dl.innerHTML = rows.map(([a, b]) => `<dt>${esc(a)}</dt><dd>${esc(b)}</dd>`).join("");
+}
+function bindSide() {
+  document.querySelectorAll("[data-ex]").forEach(b => b.onclick = () => loadExample(b.dataset.ex));
+  document.querySelectorAll("[data-mi]").forEach(b => b.onclick = () => { stash(); ST.mi = +b.dataset.mi; startMission(); });
+  const bc = $("#bCheck"); if (bc) bc.onclick = checkMission;
+  const br = $("#bReset"); if (br) br.onclick = () => { delete ST.drafts[MISIONES[ST.mi].id]; startMission(true); };
+  const bn = $("#bNext"); if (bn) bn.onclick = () => { stash(); ST.mi++; startMission(); };
+  const c = selComp();
+  if (c) {
+    for (const pr of DEFS[c.t].params) {
+      const el = $("#pp_" + pr.k); if (!el) continue;
+      if (pr.slider) el.oninput = () => { c.p[pr.k] = +el.value; $("#pv_" + pr.k).textContent = Math.round(c.p[pr.k] * 100) + " %"; stash(); };
+      else el.onchange = () => { pushHist(); c.p[pr.k] = el.value; rebuild(); };
+    }
+    document.querySelectorAll("[data-act]").forEach(b => b.onclick = () => {
+      const a = b.dataset.act;
+      if (a === "tog") { clickComp(c); }
+      else if (a === "fix") { c.st.burnt = false; c.st.th = 0; renderSide(); }
+      else if (a === "rot") rotSel(); else if (a === "dup") dupSel(); else if (a === "del") delSel();
+    });
+  }
+  const bb = $("#bBend"); if (bb) bb.onclick = () => { const w = ST.wires[ST.sel.w]; pushHist(); w.bend = w.bend === "v" ? "h" : "v"; rebuild(); };
+  const bd = $("#bDelW"); if (bd) bd.onclick = delSel;
+  updateInspector();
+}
+
+/* ---------- retos ---------- */
+function startMission(fresh) {
+  const m = MISIONES[ST.mi];
+  ST.results = null; ST.sel = null; ST.hist = []; LOG = [];
+  const dr = !fresh && ST.drafts[m.id];
+  const d = dr ? restoreData(dr) : piezasDe(m);
+  if (dr) { // las piezas del reto siempre bloqueadas y con sus valores
+    const base = piezasDe(m).comps;
+    for (const b of base) { const c = d.comps.find(x => x.id === b.id); if (c) { c.lock = true; c.name = b.name; Object.assign(c.p, b.p); } else d.comps.push(b); }
+  }
+  ST.comps = d.comps; ST.wires = d.wires; SIM = null;
+  rebuild(); fit();
+}
+function checkMission() {
+  const m = MISIONES[ST.mi];
+  const saved = EVENTS.splice(0);
+  ST.results = m.check(ST.comps, ST.wires);
+  EVENTS.length = 0; EVENTS.push(...saved);
+  const allOk = ST.results.every(r => r.ok);
+  if (allOk && !ST.done[m.id]) { ST.done[m.id] = true; toast(`Reto «${m.titulo}» superado.`, true); }
+  else if (!allOk) toast(`Faltan ${ST.results.filter(r => !r.ok).length} de ${ST.results.length} condiciones.`);
+  persist(); renderSide();
+}
+function setMode(mode) {
+  if (mode === ST.mode) return;
+  if (ST.mode === "libre" || ST.mode === "reto") stash();
+  ST.mode = mode; ST.sel = null; ST.hist = []; LOG = [];
+  $("#tabLibre").setAttribute("aria-pressed", mode === "libre"); $("#tabRetos").setAttribute("aria-pressed", mode === "reto");
+  if (mode === "reto") startMission();
+  else { const d = ST.libre ? restoreData(ST.libre) : example("lectura"); ST.comps = d.comps; ST.wires = d.wires; SIM = null; rebuild(); fit(); }
+  persist();
+}
+
+/* ---------- ejemplos del taller libre ---------- */
+function example(k) {
+  const mk = (t, name, x, y, r = 0, p = {}, st = {}) => { const c = newComp(t, x, y, r); c.name = name; Object.assign(c.p, p); Object.assign(c.st, st); return c; };
+  const W = (comps, a, pa, b, pb) => ({ a: { c: comps.find(c => c.name === a).id, p: pa }, b: { c: comps.find(c => c.name === b).id, p: pb }, bend: "h" });
+  let comps, wires;
+  if (k === "lectura") {
+    comps = [mk("bateria", "BAT1", 120, 260, 90, { v: "24" }), mk("masa", "", 120, 320), mk("disyuntor", "CB1", 240, 180, 0, { In: "5" }), mk("interruptor", "S1", 400, 180, 0, {}, { on: true }),
+      mk("lampara", "L1", 640, 260, 90, { spec: "28-10" }), mk("masa", "", 640, 320), mk("amperimetro", "A1", 520, 180, 0), mk("voltimetro", "V1", 760, 260, 90)];
+    wires = [W(comps, "BAT1", 0, "CB1", 0), W(comps, "CB1", 1, "S1", 0), W(comps, "S1", 1, "A1", 0), W(comps, "A1", 1, "L1", 0), W(comps, "V1", 0, "L1", 0), W(comps, "V1", 1, "L1", 1)];
+  } else if (k === "rele") {
+    comps = [mk("generador", "G1", 100, 300, 90, { tipo: "cc28" }), mk("masa", "", 100, 360), mk("disyuntor", "CB1", 220, 400, 0, { In: "2" }), mk("interruptor", "S1", 360, 400, 0), mk("rele", "K1", 520, 440, 90), mk("masa", "", 520, 500),
+      mk("disyuntor", "CB2", 280, 180, 0, { In: "15" }), mk("contacto_na", "K1", 520, 180, 0), mk("motor", "M1", 760, 300, 90), mk("masa", "", 760, 360)];
+    wires = [W(comps, "G1", 0, "CB1", 0), W(comps, "CB1", 1, "S1", 0), { a: { c: comps[3].id, p: 1 }, b: { c: comps[4].id, p: 0 }, bend: "h" }, W(comps, "G1", 0, "CB2", 0), { a: { c: comps[6].id, p: 1 }, b: { c: comps[7].id, p: 0 }, bend: "h" }, { a: { c: comps[7].id, p: 1 }, b: { c: comps[8].id, p: 0 }, bend: "h" }];
+  } else {
+    comps = [mk("generador", "G1", 100, 300, 90, { tipo: "ca26" }), mk("masa", "", 100, 360), mk("diodo", "D1", 300, 220, 0), mk("resistencia", "R1", 520, 300, 90, { R: "100", pw: "25" }), mk("masa", "", 520, 360),
+      mk("polimetro", "PM1", 700, 300, 0, { m: "vdc" }), mk("masa", "", 720, 400)];
+    wires = [W(comps, "G1", 0, "D1", 0), W(comps, "D1", 1, "R1", 0), W(comps, "PM1", 1, "R1", 0)];
+    comps[6].x = 680; comps[6].y = 400; // la masa del COM del polímetro
+    wires.push({ a: { c: comps[5].id, p: 0 }, b: { c: comps[6].id, p: 0 }, bend: "v" });
+  }
+  return { comps, wires };
+}
+function loadExample(k) { pushHist(); const d = example(k); ST.comps = d.comps; ST.wires = d.wires; ST.sel = null; SIM = null; rebuild(); fit(); toast("Ejemplo cargado. Cambia valores o añade piezas para ver qué pasa.", true); }
+
+/* ---------- botones y teclado ---------- */
+$("#tabLibre").onclick = () => setMode("libre");
+$("#tabRetos").onclick = () => setMode("reto");
+$("#btnHelp").onclick = () => { $("#help").hidden = false; $("#helpClose").focus(); };
+$("#helpClose").onclick = () => { $("#help").hidden = true; };
+$("#help").addEventListener("click", e => { if (e.target.id === "help") $("#help").hidden = true; });
+$("#bRun").onclick = () => { ST.run = !ST.run; $("#bRun").className = ST.run ? "on" : "off"; $("#bRun").textContent = ST.run ? "Simulación en marcha" : "Simulación en pausa"; };
+$("#bUndo").onclick = undo; $("#bRot").onclick = rotSel; $("#bDup").onclick = dupSel; $("#bDel").onclick = delSel;
+$("#bZi").onclick = () => { const r = board.getBoundingClientRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1.2); };
+$("#bZo").onclick = () => { const r = board.getBoundingClientRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1 / 1.2); };
+$("#bFit").onclick = fit; $("#bFix").onclick = fixAll;
+let clearArm = 0;
+$("#bClear").onclick = () => {
+  const now = Date.now();
+  if (now - clearArm > 3000) { clearArm = now; $("#bClear").textContent = "¿Vaciar? Toca otra vez"; setTimeout(() => { $("#bClear").textContent = "Vaciar"; }, 3000); return; }
+  clearArm = 0; $("#bClear").textContent = "Vaciar"; pushHist();
+  if (ST.mode === "reto") { const keep = ST.comps.filter(c => c.lock); ST.comps = keep; ST.wires = []; } else { ST.comps = []; ST.wires = []; }
+  ST.sel = null; rebuild();
+};
+$("#bSnd").onclick = () => { ST.sound = !ST.sound; $("#bSnd").textContent = "Sonido: " + (ST.sound ? "sí" : "no"); persist(); };
+window.addEventListener("keydown", e => {
+  if (e.target.closest("input, select, textarea")) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); }
+  else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); delSel(); }
+  else if (e.key === "r" || e.key === "R") rotSel();
+  else if (e.key === "Escape") { if (!$("#help").hidden) $("#help").hidden = true; else { ST.sel = null; renderAllSelection(); } }
+});
+window.addEventListener("resize", () => { });
+
+/* ---------- arranque ---------- */
+function start(hot) {
+  let saved = hot && hot.state;
+  if (!saved) { try { saved = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { saved = null; } }
+  if (saved) { ST.done = saved.done || {}; ST.drafts = saved.drafts || {}; ST.libre = saved.libre || null; ST.mi = Math.min(MISIONES.length - 1, saved.mi || 0); ST.sound = saved.sound !== false; }
+  $("#bSnd").textContent = "Sonido: " + (ST.sound ? "sí" : "no");
+  buildPalette();
+  const mode = saved && saved.mode === "reto" ? "reto" : "libre";
+  ST.mode = "none"; setMode(mode);
+  requestAnimationFrame(t => { lastT = t; fit(); requestAnimationFrame(frame); });
+}
+if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => { stash(); return { state: { mode: ST.mode, mi: ST.mi, done: ST.done, drafts: ST.drafts, libre: ST.libre, sound: ST.sound } }; });
+if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start); else start(window.claude && window.claude.hot ? window.claude.hot.data : null);
+
+</script>
+</body>
+</html>

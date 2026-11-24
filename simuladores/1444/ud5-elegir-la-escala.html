@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Cambia la tensión real, el instrumento y la escala, y compara la resolución y el error de cada escala.">
+<title>Elegir la escala del instrumento · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .salida { white-space: pre-wrap; }
+  .veredicto { font-weight: 700; margin-top: 10px; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Elegir la escala del instrumento</h1>
+    <p class="sub">UD5 · CE a · CE c · CE d · alcance, resolución y error</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div class="fila">
+        <div id="instrumento"></div>
+        <div id="barras"></div>
+      </div>
+      <p class="nota-ref">Digital: la escala más baja que no dé OL. Analógico: la que deje la aguja en el último tercio.</p>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Mandos</h2><div class="controles" id="mandos"></div></div>
+      <div class="panel"><h2>Resultado</h2><div class="salida" id="salida"></div><div class="salida veredicto" id="veredicto"></div></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Mueve la tensión real y cambia de escala. El digital (2000 cuentas, ±(0,5 % de la lectura + 2 dígitos)) muestra «OL» si la tensión supera la escala; el analógico (clase 1,5: error de ±1,5 % del alcance) lleva la aguja al tope.</p>
+      <p>El gráfico de barras compara el error relativo máximo de la misma medida en todas las escalas.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Preguntas para el alumnado</h2>
+      <ul>
+        <li>¿Qué escala da la medida con menos error?</li>
+        <li>¿Por qué no se debe medir 5 V en la escala de 300 V de un analógico?</li>
+        <li>¿Qué es la resolución en el digital y la apreciación en el analógico?</li>
+      </ul>
+      <p class="nota-ref">Las especificaciones de los dos instrumentos son valores típicos de referencia: no están en los apuntes.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  /* CÁLCULO */
+  // Polímetro digital de 2000 cuentas: [etiqueta, alcance en V, decimales en pantalla, unidad de pantalla, factor de pantalla]
+  const DIG = [["200 mV", 0.2, 1, "mV", 1000], ["2 V", 2, 3, "V", 1], ["20 V", 20, 2, "V", 1], ["200 V", 200, 1, "V", 1], ["1000 V", 1000, 0, "V", 1]];
+  const CUENTAS = 2000, PCT_LECT = 0.5, DIGITOS = 2;
+  // Voltímetro analógico de clase 1,5: [etiqueta, alcance en V, n.º de divisiones]
+  const ANA = [["3 V", 3, 30], ["10 V", 10, 50], ["30 V", 30, 30], ["100 V", 100, 20], ["300 V", 300, 30]];
+  const CLASE = 1.5;
+  const VMIN = 0.05, VMAX = 1000;
+
+  function pyRound(x) { const r = Math.round(x); return (Math.abs(x % 1) === 0.5 && r % 2 !== 0) ? r - 1 : r; }
+  const fmtV = (v) => num(v, v < 1 ? 3 : (v < 100 ? 2 : 1), "V");
+
+  // [texto en pantalla o 'OL', resolución en V, error máximo en V o null]
+  function digital(v, i) {
+    const [, alc, dec, uni, fac] = DIG[i];
+    const res = alc / CUENTAS;
+    const cuentas = pyRound(v / res);
+    if (cuentas >= CUENTAS || v > 1000) return ["OL", res, null];
+    const lect = cuentas * res;
+    const err = PCT_LECT / 100 * lect + DIGITOS * res;
+    return [num(lect * fac, dec, uni), res, err];
+  }
+
+  // [lectura estimada a media división o null si se sale, apreciación en V, error máximo en V]
+  function analogico(v, i) {
+    const [, alc, ndiv] = ANA[i];
+    const apr = alc / ndiv;
+    const err = CLASE / 100 * alc;
+    if (v > alc) return [null, apr, err];
+    return [pyRound(v / (apr / 2)) * apr / 2, apr, err];
+  }
+
+  // Texto del panel, aviso y errores de cada escala (null = OL o tope)
+  function resultado(tipo, i, v) {
+    let cuerpo, aviso, filas, alerta, lcd = null;
+    if (tipo === 0) {
+      const [l, res, err] = digital(v, i);
+      lcd = l; alerta = err === null;
+      filas = DIG.map((_, k) => digital(v, k)[2]);
+      const d = DIG[i];
+      if (alerta) {
+        cuerpo = `Tensión real: ${fmtV(v)}\nEscala: ${d[0]}\nPantalla: OL (desbordamiento)\nResolución: ${num(res * d[4], d[2], d[3])}`;
+        aviso = "FUERA DE RANGO:\nsube de escala";
+      } else {
+        cuerpo = `Tensión real: ${fmtV(v)}\nEscala: ${d[0]}\nPantalla: ${l}\nResolución (1 dígito):\n   ${num(res * d[4], d[2], d[3])}\n`
+          + `Error máx. ±(0,5 % + 2 díg.):\n   ± ${num(err * d[4], d[2] + 1, d[3])}\nError relativo: ± ${num(100 * err / v, 2, "%")}`;
+        const mejor = mejorEscala(filas);
+        aviso = mejor === i ? "Escala adecuada" : `Mejor: escala de ${DIG[mejor][0]}`;
+      }
+    } else {
+      const [lect, apr, err] = analogico(v, i);
+      alerta = lect === null;
+      filas = ANA.map((_, k) => (analogico(v, k)[0] === null ? null : analogico(v, k)[2]));
+      const a = ANA[i];
+      if (alerta) {
+        cuerpo = `Tensión real: ${fmtV(v)}\nAlcance: ${a[0]}\nLa aguja pega en el tope.`;
+        aviso = "FUERA DE ESCALA:\npeligro para la aguja";
+      } else {
+        cuerpo = `Tensión real: ${fmtV(v)}\nAlcance: ${a[0]}\nLectura ≈ ${num(lect, 2, "V")}\nApreciación (1 división):\n   ${num(apr, 1, "V")}\n`
+          + `Error máx. ±1,5 % del alcance:\n   ± ${num(err, 2, "V")}\nError relativo: ± ${num(100 * err / v, 1, "%")}\nAguja al ${num(100 * v / a[1], 0, "%")} de la escala`;
+        const mejor = mejorEscala(filas);
+        aviso = mejor === i ? "Escala adecuada" : `Mejor: alcance de ${ANA[mejor][0]}`;
+      }
+    }
+    const color = alerta ? C.RED : (aviso === "Escala adecuada" ? C.GREEN : "#D9822B");
+    return { cuerpo, aviso, color, filas, alerta, lcd };
+  }
+  function mejorEscala(filas) {
+    let mejor = -1;
+    filas.forEach((e, k) => { if (e !== null && (mejor < 0 || e < filas[mejor])) mejor = k; });
+    return mejor;
+  }
+  /* FIN CÁLCULO */
+
+  const st = { tipo: 0, esc: 3, v: 4.8 };
+  let r = null;
+  const XW = 0.38 * 13.33 / (0.47 * 7.5);  // ancho de la esfera en unidades del alto (aspecto 1:1), como el Python
+  const XC = XW / 2;
+  const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+
+  const instrumento = new Sim.Lienzo("#instrumento", {
+    ancho: 600, proporcion: 1 / XW, etiqueta: "Pantalla del instrumento",
+    dibujar(ctx, w, h) {
+      if (!r) return;
+      const X = (x) => x / XW * w, Y = (y) => (1 - y) * h, S = (d) => d * h;
+      if (st.tipo === 0) {
+        Sim.caja(ctx, X(0.23), Y(0.97), S(0.98), S(0.94), { relleno: "#2B2B2B", color: C.NAVY, ancho: 2, radio: 26 });
+        Sim.caja(ctx, X(0.32), Y(0.84), S(0.80), S(0.35), { relleno: "#C9D8B6", color: "#555555", ancho: 1.2, radio: 8 });
+        ctx.save();
+        ctx.font = `bold ${Math.round(S(0.15))}px ${MONO}`;
+        ctx.textAlign = "right"; ctx.textBaseline = "middle";
+        ctx.fillStyle = r.alerta ? C.RED : "#1B1B1B";
+        ctx.fillText(r.lcd, X(1.06), Y(0.665));
+        ctx.restore();
+        Sim.texto(ctx, "DCV  ·  " + DIG[st.esc][0], X(XC), Y(0.36), { tam: 28, color: C.GOLD, negrita: true, alin: "center" });
+        ctx.save();
+        ctx.font = `21px ${MONO}`; ctx.textAlign = "center"; ctx.fillStyle = C.WHITE;
+        ctx.fillText("COM          V Ω", X(XC), Y(0.20));
+        ctx.restore();
+      } else {
+        const [, alc, ndiv] = ANA[st.esc];
+        Sim.caja(ctx, X(0.01), Y(0.97), X(XW - 0.02), S(0.94), { relleno: "#FBF8EE", color: C.NAVY, ancho: 2, radio: 22 });
+        const cx = XC, cy = 0.17, rr = 0.66;
+        const P = (rad, a) => [X(cx + rad * Math.cos(a)), Y(cy + rad * Math.sin(a))];
+        ctx.save(); ctx.strokeStyle = C.NAVY; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(X(cx), Y(cy), S(rr - 0.005), -150 * Math.PI / 180, -30 * Math.PI / 180); ctx.stroke(); ctx.restore();
+        for (let k = 0; k <= ndiv; k++) {
+          const a = (150 - 120 * k / ndiv) * Math.PI / 180;
+          const larga = k % ([30, 50].includes(ndiv) ? 5 : 4) === 0 || k === ndiv;
+          const l = larga ? 0.08 : 0.04;
+          Sim.polilinea(ctx, [P(rr, a), P(rr - l, a)], { color: C.NAVY, ancho: larga ? 2 : 1.2 });
+          if (larga) {
+            const [tx, ty] = P(rr - 0.15, a);
+            Sim.texto(ctx, num(k * alc / ndiv, alc === 3 ? 1 : 0), tx, ty, { tam: 18, alin: "center", base: "middle" });
+          }
+        }
+        const frac = Math.min(st.v / alc, 1.04);
+        const a = (150 - 120 * frac) * Math.PI / 180;
+        Sim.polilinea(ctx, [P(0, a), P(rr - 0.02, a)], { color: r.alerta ? C.RED : "#1B1B1B", ancho: 3.5 });
+        Sim.circulo(ctx, X(cx), Y(cy), 10, { relleno: C.NAVY, color: null });
+        Sim.texto(ctx, `V · alcance ${ANA[st.esc][0]} · clase 1,5`, X(XC), Y(0.885), { tam: 21, color: C.MUTED, alin: "center", base: "middle" });
+      }
+    },
+  });
+
+  const barras = new Sim.Lienzo("#barras", {
+    proporcion: 0.8, altoMin: 280, altoMax: 420, etiqueta: "Error relativo máximo de la misma medida en cada escala",
+    dibujar(ctx, w, h, L) {
+      if (!r) return;
+      const etiquetas = (st.tipo === 0 ? DIG : ANA).map((d) => d[0]);
+      const ej = new Sim.Ejes(L, ctx, {
+        xlim: [-0.6, 4.6], ylim: [0.1, 300], logy: true, xticks: [0, 1, 2, 3, 4], fmtx: (k) => etiquetas[k],
+        fmty: (v) => num(v, v < 1 ? 1 : 0), ylabel: "Error relativo máx. (%)", titulo: "La misma medida en cada escala", tam: 12,
+      });
+      ej.marco();
+      r.filas.forEach((e, k) => {
+        if (e === null) {
+          const x0 = ej.px(k - 0.4), x1 = ej.px(k + 0.4), y0 = ej.py(0.1), y1 = ej.py(100);
+          ctx.save();
+          ctx.beginPath(); ctx.rect(x0, y1, x1 - x0, y0 - y1); ctx.fillStyle = C.WHITE; ctx.fill(); ctx.clip();
+          ctx.strokeStyle = C.RED; ctx.lineWidth = 1;
+          ctx.beginPath();
+          for (let d = -(y0 - y1); d < x1 - x0; d += 9) { ctx.moveTo(x0 + d, y0); ctx.lineTo(x0 + d + (y0 - y1), y1); }
+          ctx.stroke(); ctx.restore();
+          ctx.save(); ctx.strokeStyle = C.RED; ctx.lineWidth = 1.5; ctx.strokeRect(x0, y1, x1 - x0, y0 - y1); ctx.restore();
+          ctx.save(); ctx.translate(ej.px(k), ej.py(8)); ctx.rotate(-Math.PI / 2);
+          Sim.texto(ctx, st.tipo === 0 ? "OL" : "tope", 0, 0, { tam: 13, negrita: true, color: C.RED, alin: "center", base: "middle", fondo: C.WHITE, pad: 2 });
+          ctx.restore();
+        } else {
+          const ev = 100 * e / st.v, hv = Math.min(ev, 100);
+          const x0 = ej.px(k - 0.4), x1 = ej.px(k + 0.4), y0 = ej.py(0.1), y1 = ej.py(hv);
+          ctx.save();
+          ctx.fillStyle = k === st.esc ? C.GOLD : "#C9D3E3"; ctx.fillRect(x0, y1, x1 - x0, y0 - y1);
+          ctx.strokeStyle = C.NAVY; ctx.lineWidth = k === st.esc ? 2 : 0.8; ctx.strokeRect(x0, y1, x1 - x0, y0 - y1);
+          ctx.restore();
+          Sim.texto(ctx, num(ev, ev < 10 ? 1 : 0), ej.px(k), ej.py(hv * 1.15), { tam: 12, alin: "center" });
+        }
+      });
+    },
+  });
+
+  const salida = document.getElementById("salida");
+  const veredicto = document.getElementById("veredicto");
+  function actualizar() {
+    r = resultado(st.tipo, st.esc, st.v);
+    salida.textContent = r.cuerpo;
+    veredicto.textContent = r.aviso;
+    veredicto.style.color = r.color;
+    instrumento.pedir(); barras.pedir();
+  }
+
+  Sim.opciones("#mandos", { titulo: "Instrumento", etiquetas: ["Digital 2000 cuentas", "Analógico clase 1,5"], activa: 0, alCambiar: (i) => {
+    st.tipo = i;
+    const nombres = (i === 0 ? DIG : ANA).map((d) => d[0]);
+    escala.caja.querySelectorAll("label").forEach((lab, k) => { lab.lastChild.textContent = nombres[k]; });
+    actualizar();
+  } });
+  const escala = Sim.opciones("#mandos", { titulo: "Escala", etiquetas: DIG.map((d) => d[0]), activa: 3, alCambiar: (i) => { st.esc = i; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "Tensión real", min: Math.log10(VMIN), max: Math.log10(VMAX), valor: Math.log10(4.8), paso: "any",
+    formato: (e) => fmtV(10 ** e), alCambiar: (e) => { st.v = 10 ** e; actualizar(); } });
+  actualizar();
+})();
+</script>
+</body>
+</html>

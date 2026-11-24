@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Elige el material, la longitud y la sección de un cable, y calcula su resistencia y la caída de tensión.">
+<title>Resistencia de un conductor · 1425</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  #salida p { margin: 0 0 6px; overflow-wrap: anywhere; }
+  #salida .r-grande { font-size: 1.35rem; font-weight: 700; color: #0E1B2C; }
+  #salida .pct { margin-top: 10px; font-weight: 700; }
+  .regla-cable { margin: 0; padding: 0 4px; color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1425 Fundamentos de electricidad</a></p>
+    <h1>Resistencia de un conductor: R = ρ · l / S</h1>
+    <p class="sub">UD 3 · Terminología eléctrica · material, longitud y sección</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div id="cable"></div>
+      <p class="regla-cable">Doble de longitud → doble de resistencia. Doble de sección → mitad de resistencia.</p>
+      <div id="barras"></div>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Mandos</h2><div class="controles" id="mandos"></div></div>
+      <div class="panel"><h2>Resultado</h2><div id="salida"></div></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Elige el material, la longitud y la sección de un cable y observa.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Qué observar</h2>
+      <ul>
+        <li>su resistencia R = ρ·l/S y su conductancia G = 1/R;</li>
+        <li>la caída de tensión ΔV = I·R y la potencia perdida P = I²·R con la corriente que elijas (y qué parte supone de los 28 V de la red de continua de un avión);</li>
+        <li>cómo quedaría el mismo cable con otros materiales.</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Datos de referencia</h2>
+      <p class="nota-ref">Resistividad a 20 °C en Ω·mm²/m (= 10⁻⁶ Ω·m): valores de la UD 7, salvo el cobre (0,0172, el que se usa en clase). Secciones normalizadas de 0,25 a 50 mm².</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1425 · Fundamentos de electricidad · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C } = Sim;
+  const DARK = "#0E1B2C", ACC = "#00A6D6", AMB = "#F2A33A", RED = "#E4572E", TXT = "#15202E", MUTED = "#4B5A6E";
+
+  // ── cálculo (puro) ───────────────────────────────────────────────
+  // resistividad a 20 °C en Ω·mm²/m y color del dibujo
+  const MATERIALES = { "Plata": [0.0155, "#C9CED6"], "Cobre": [0.0172, "#D9844A"], "Oro": [0.0222, "#E6B422"],
+    "Aluminio": [0.0282, "#AEB7C2"], "Wolframio": [0.0565, "#6E7783"], "Níquel": [0.064, "#9C9A86"],
+    "Hierro": [0.089, "#7A6F66"], "Nicrom": [1.10, "#8C5E8C"] };
+  const NOMBRES = Object.keys(MATERIALES);
+  const SECCIONES = [0.25, 0.5, 0.75, 1, 1.5, 2.5, 4, 6, 10, 16, 25, 35, 50];
+  // Número con «cifras» cifras significativas (como num() del Python)
+  function numC(x, cifras = 3) {
+    if (x === 0) return "0";
+    const dec = Math.max(0, cifras - 1 - Math.floor(Math.log10(Math.abs(x))));
+    return x.toFixed(dec).replace(".", ",");
+  }
+  function conductor(mat, l, S, I) {
+    const rho = MATERIALES[mat][0];
+    const R = rho * l / S, G = 1 / R, dV = I * R, P = I * I * R, pct = 100 * dV / 28;
+    return {
+      R, G, dV, P, pct, colp: pct < 2 ? ACC : (pct < 5 ? AMB : RED),
+      cabecera: `${mat}: ρ = ${numC(rho)} Ω·mm²/m      S = ${numC(S, 2)} mm²`,
+      lineas: [
+        `R = ${numC(rho)} · ${l.toFixed(0)} / ${numC(S, 2)} = ${numC(R)} Ω`,
+        `Conductancia G = 1 / R = ${numC(G)} S`,
+        `Con ${I.toFixed(0)} A:  caída de tensión ΔV = I·R = ${dV ? numC(dV) : "0"} V`,
+        `potencia perdida en el cable P = I²·R = ${P ? numC(P) : "0"} W`,
+        `Sobre una barra de 28 V, el cable se «come» el ${pct ? numC(pct, 2) : "0"} % de la tensión`,
+      ],
+      otros: NOMBRES.map((m) => MATERIALES[m][0] * l / S),
+    };
+  }
+  // ── fin cálculo ──────────────────────────────────────────────────
+
+  let mat = "Cobre", l = 20, iS = SECCIONES.indexOf(1.5), I = 10, Rz = conductor(mat, l, SECCIONES[iS], I);
+
+  // Dibujo del cable: largo ∝ l, grosor ∝ diámetro
+  const lCable = new Sim.Lienzo("#cable", {
+    proporcion: 0.3, altoMin: 150, altoMax: 260, etiqueta: "Dibujo del cable con su longitud y su sección",
+    dibujar(ctx, w, h) {
+      const sx = w / 11.2, sy = h / 3.1, X = (x) => (x + 0.6) * sx, Y = (y) => (1.6 - y) * sy;
+      const S = SECCIONES[iS], col = MATERIALES[mat][1];
+      const largo = 0.6 + 9.4 * l / 100, d = 0.2 + 1.1 * Math.sqrt(S / 50);
+      const elipse = (cx) => { ctx.beginPath(); ctx.ellipse(X(cx), Y(0), 0.125 * sx, d / 2 * sy, 0, 0, 2 * Math.PI); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = DARK; ctx.stroke(); };
+      elipse(0);
+      ctx.fillStyle = col; ctx.fillRect(X(0), Y(d / 2), largo * sx, d * sy);
+      ctx.lineWidth = 1.2; ctx.strokeStyle = DARK; ctx.strokeRect(X(0), Y(d / 2), largo * sx, d * sy);
+      elipse(largo);
+      Sim.flecha(ctx, X(largo / 2), Y(-0.95), X(largo), Y(-0.95), { color: MUTED, ancho: 1.2, punta: 8 });
+      Sim.flecha(ctx, X(largo / 2), Y(-0.95), X(0), Y(-0.95), { color: MUTED, ancho: 1.2, punta: 8 });
+      const tam = Math.max(12, Math.min(16, w / 48));
+      Sim.texto(ctx, `l = ${l.toFixed(0)} m`, X(largo / 2), Y(-1.3), { tam, color: MUTED, alin: "center", base: "middle" });
+      Sim.texto(ctx, Rz.cabecera.replace("      ", w < 520 ? "\n" : "      "), X(0), Y(1.4), { tam, negrita: true, color: TXT, base: "top" });
+    },
+  });
+
+  // Comparación de materiales (barras horizontales, escala logarítmica)
+  const fmtLog = (v) => (v >= 1 ? Sim.num(v, 0) : Sim.num(v, Math.round(-Math.log10(v))));
+  const lBarras = new Sim.Lienzo("#barras", {
+    proporcion: 0.55, altoMin: 300, altoMax: 420, etiqueta: "Resistencia del mismo cable con otros materiales",
+    dibujar(ctx, w, h, L) {
+      const rs = Rz.otros;
+      const ej = new Sim.Ejes(L, ctx, {
+        xlim: [Math.min(...rs) / 1.5, Math.max(...rs) * 8], logx: true, ylim: [-0.6, NOMBRES.length - 0.4],
+        yticks: NOMBRES.map((_, i) => i), fmty: (v) => NOMBRES[NOMBRES.length - 1 - v], fmtx: fmtLog,
+        xlabel: "R (Ω, escala logarítmica)", titulo: "El mismo cable en otros materiales", margen: { izq: 84 }, rejilla: false,
+      });
+      ej.marco();
+      ej.recortar();
+      NOMBRES.forEach((m, i) => {
+        const y = NOMBRES.length - 1 - i, x0 = ej.px(ej.xlim[0]), x1 = ej.px(rs[i]);
+        ctx.fillStyle = m === mat ? AMB : "#C7D3DD";
+        ctx.fillRect(x0, ej.py(y + 0.4), x1 - x0, ej.py(y - 0.4) - ej.py(y + 0.4));
+        Sim.texto(ctx, `${numC(rs[i])} Ω`, ej.px(rs[i] * 1.15), ej.py(y), { tam: 13, color: TXT, base: "middle", negrita: m === mat });
+      });
+      ej.soltar();
+    },
+  });
+
+  const salida = document.getElementById("salida");
+  function actualizar() {
+    Rz = conductor(mat, l, SECCIONES[iS], I);
+    const L = Rz.lineas;
+    salida.innerHTML = `<p class="r-grande">${L[0]}</p><p>${L[1]}</p><p>${L[2]}</p><p>${L[3]}</p>` +
+      `<p class="pct" style="color:${Rz.colp}">${L[4]}</p>`;
+    lCable.pedir(); lBarras.pedir();
+  }
+
+  Sim.opciones("#mandos", { titulo: "Material", etiquetas: NOMBRES, activa: NOMBRES.indexOf(mat), alCambiar: (i, t) => { mat = t; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "longitud l (m)", min: 1, max: 100, valor: l, paso: 1, formato: (v) => v.toFixed(0), alCambiar: (v) => { l = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "sección S (mm²)", min: 0, max: SECCIONES.length - 1, valor: iS, paso: 1, formato: (v) => numC(SECCIONES[v], 2), alCambiar: (v) => { iS = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "corriente I (A)", min: 0, max: 50, valor: I, paso: 1, formato: (v) => v.toFixed(0), alCambiar: (v) => { I = v; actualizar(); } });
+  actualizar();
+})();
+</script>
+</body>
+</html>

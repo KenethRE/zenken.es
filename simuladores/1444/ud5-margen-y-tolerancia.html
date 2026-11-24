@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Elige un caso, ajusta la tolerancia, la lectura y el error del instrumento, y decide si está en margen.">
+<title>¿Está en margen? Tolerancia y error del instrumento · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .salida { white-space: pre-wrap; }
+  .veredicto { font-weight: 700; margin-top: 10px; font-size: 1.25rem; line-height: 1.3; }
+  .titulo-graf { margin: 0 0 6px; font-family: var(--serif); font-weight: 700; color: var(--navy); font-size: 1.05rem; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>¿Está en margen? Tolerancia y error del instrumento</h1>
+    <p class="sub">UD5 · CE b · CE d · comparar con la documentación</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div class="tarjeta">
+        <p class="titulo-graf">Verde: margen del manual · dorado: lectura ± error del instrumento</p>
+        <div id="grafica"></div>
+      </div>
+      <div class="tarjeta">
+        <h2>Regla</h2>
+        <p>Lectura ± error del instrumento entera dentro de la banda → cumple; entera fuera → no cumple; si toca el límite → dudoso: repite la medida con un instrumento mejor.</p>
+      </div>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Mandos</h2><div class="controles" id="mandos"></div></div>
+      <div class="panel"><h2>Resultado</h2><div class="salida" id="salida"></div><div class="salida veredicto" id="veredicto"></div></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Elige un caso (barra de 28 V, sensor de 1 kΩ, corriente de un indicador o condensador de filtro), mueve la tolerancia del manual, la lectura del polímetro y el error máximo del instrumento.</p>
+      <p>La banda verde es el margen admisible; la barra dorada, la lectura con su incertidumbre (± error del instrumento). El panel pasa la lectura a otros prefijos (kΩ, µA, µF…).</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Preguntas para el alumnado</h2>
+      <ul>
+        <li>¿Qué pasa si la lectura está dentro pero su incertidumbre toca el límite?</li>
+        <li>¿Por qué un instrumento con menos error permite decidir en casos que con otro quedan «dudosos»?</li>
+        <li>¿Cuántos µA son 15 mA?</li>
+      </ul>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  /* CÁLCULO */
+  const ORANGE = "#D9822B";
+  // nombre, nominal, unidad, decimales, otras unidades [[factor, unidad, decimales]], tolerancia %, lectura, error instr. %
+  const CASOS = [
+    ["Barra de 28 V CC", 28.0, "V", 2, [[1000, "mV", 0]], 2.0, 28.50, 1.0],
+    ["Sensor de 1 kΩ", 1000.0, "Ω", 0, [[0.001, "kΩ", 3], [1e-6, "MΩ", 6]], 1.0, 1006.0, 0.5],
+    ["Corriente de un indicador · 15 mA", 15.0, "mA", 2, [[1000, "µA", 0], [0.001, "A", 5]], 10.0, 16.20, 1.0],
+    ["Condensador de filtro · 220 nF", 220.0, "nF", 1, [[0.001, "µF", 4], [1000, "pF", 0]], 5.0, 229.0, 2.0],
+  ];
+
+  // [texto, color, mín, máx, U] según la lectura y su incertidumbre
+  function veredicto(nominal, tol, lectura, err) {
+    const lo = nominal * (1 - tol / 100), hi = nominal * (1 + tol / 100);
+    const u = Math.abs(lectura) * err / 100;
+    if (lo <= lectura - u && lectura + u <= hi) return ["DENTRO DE MARGEN", C.GREEN, lo, hi, u];
+    if (lectura + u < lo || lectura - u > hi) return ["FUERA DE MARGEN", C.RED, lo, hi, u];
+    return ["DUDOSO: la incertidumbre\ntoca el límite", ORANGE, lo, hi, u];
+  }
+
+  function resultado(i, tol, err, lect) {
+    const [, nom, uni, dec, otras] = CASOS[i];
+    const [verd, col, lo, hi, u] = veredicto(nom, tol, lect, err);
+    const conv = otras.map(([f, un, d]) => `   = ${num(lect * f, d, un)}`).join("\n");
+    const desv = lect - nom;
+    const sg = desv >= 0 ? "+" : "−";
+    const texto = `Margen: ${num(lo, dec + 1, uni)} … ${num(hi, dec + 1, uni)}\n`
+      + `Lectura: ${num(lect, dec, uni)}\n${conv}\n`
+      + `Incertidumbre: ± ${num(u, dec + 1, uni)}\n`
+      + `Desviación del nominal:\n   ${sg}${num(Math.abs(desv), dec, uni)}`
+      + `  (${sg}${num(Math.abs(desv) / nom * 100, 2, "%")})`;
+    return { verd, col, lo, hi, u, texto };
+  }
+  /* FIN CÁLCULO */
+
+  const st = { i: 0, tol: 2.0, err: 1.0, lect: 28.5 };
+  let r = null;
+
+  const grafica = new Sim.Lienzo("#grafica", {
+    proporcion: 0.36, altoMin: 230, altoMax: 330, etiqueta: "Banda de tolerancia y lectura con su incertidumbre",
+    dibujar(ctx, w, h, L) {
+      if (!r) return;
+      const [nombre, nom, uni, dec] = CASOS[st.i];
+      const ej = new Sim.Ejes(L, ctx, { xlim: [nom * 0.85, nom * 1.15], ylim: [0, 1], yticks: [], xlabel: `${nombre}  (${uni})`, margen: { izq: 14, der: 14 } });
+      ej.marco();
+      ej.area([r.lo, r.hi], [0.75, 0.75], [0.25, 0.25], { color: C.GREEN, alfa: 0.22 });
+      ej.vline(r.lo, { color: C.GREEN, ancho: 2 });
+      ej.vline(r.hi, { color: C.GREEN, ancho: 2 });
+      ej.vline(nom, { color: C.NAVY, ancho: 1.5, guion: true });
+      ej.texto(nom, 0.93, `nominal ${num(nom, dec, uni)}`, { tam: 13, color: C.NAVY, alin: "center", base: "middle", fondo: C.WHITE, pad: 2 });
+      ej.texto(r.lo, 0.08, `mín. ${num(r.lo, dec + 1, uni)} `, { tam: 13, color: C.GREEN, alin: "right", base: "middle" });
+      ej.texto(r.hi, 0.08, ` máx. ${num(r.hi, dec + 1, uni)}`, { tam: 13, color: C.GREEN, alin: "left", base: "middle" });
+      // lectura ± incertidumbre (barra de error dorada)
+      ej.recortar();
+      const y = ej.py(0.5), xa = ej.px(st.lect - r.u), xb = ej.px(st.lect + r.u);
+      Sim.polilinea(ctx, [[xa, y], [xb, y]], { color: C.GOLD, ancho: 8 });
+      Sim.polilinea(ctx, [[xa, y - 12], [xa, y + 12]], { color: C.GOLD, ancho: 3 });
+      Sim.polilinea(ctx, [[xb, y - 12], [xb, y + 12]], { color: C.GOLD, ancho: 3 });
+      ej.soltar();
+      ej.punto(st.lect, 0.5, { color: r.col, radio: 9, borde: C.NAVY });
+    },
+  });
+
+  const salida = document.getElementById("salida");
+  const verdEl = document.getElementById("veredicto");
+  function actualizar() {
+    r = resultado(st.i, st.tol, st.err, st.lect);
+    salida.textContent = r.texto;
+    salida.style.color = C.NAVY;
+    verdEl.textContent = r.verd;
+    verdEl.style.color = r.col;
+    grafica.pedir();
+  }
+
+  let fmtLect = (v) => num(v, 2, "V");
+  Sim.opciones("#mandos", { titulo: "Caso", etiquetas: CASOS.map((c) => c[0]), activa: 0, alCambiar: (i) => { st.i = i; configurarLectura(); actualizar(); } });
+  const dt = Sim.deslizador("#mandos", { etiqueta: "Tolerancia ±", min: 0.5, max: 20, valor: 2.0, paso: 0.5, unidad: "%", dec: 1, alCambiar: (v) => { st.tol = v; actualizar(); } });
+  const de = Sim.deslizador("#mandos", { etiqueta: "Error instr. ±", min: 0, max: 5, valor: 1.0, paso: 0.1, unidad: "%", dec: 1, alCambiar: (v) => { st.err = v; actualizar(); } });
+  const dl = Sim.deslizador("#mandos", { etiqueta: "Lectura", min: 23.8, max: 32.2, valor: 28.5, paso: 0.01, formato: (v) => fmtLect(v), alCambiar: (v) => { st.lect = v; actualizar(); } });
+
+  // Al cambiar de caso: rango de la lectura ±15 % del nominal, paso según los decimales y valores iniciales del caso
+  function configurarLectura() {
+    const [, nom, uni, dec, , tol, lect, err] = CASOS[st.i];
+    const redondo = (x) => Number(x.toFixed(6));
+    dl.input.min = redondo(nom * 0.85); dl.input.max = redondo(nom * 1.15); dl.input.step = 10 ** (-dec);
+    fmtLect = (v) => num(v, dec, uni);
+    dt.valor = tol; de.valor = err; dl.valor = lect;
+    st.tol = tol; st.err = err; st.lect = lect;
+  }
+  actualizar();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Elige el tipo de transistor y sube la tensión de entrada para ver sus tres zonas: corte, activa y saturación.">
+<title>Tipos de transistor y sus 3 zonas de trabajo · 1426</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .zonas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .zona { border: 1px solid; border-radius: 10px; padding: 8px 6px; text-align: center; background: #F3F6FA; line-height: 1.25; }
+  .zona b { display: block; font-size: 1.02rem; }
+  .zona span { font-size: .9rem; color: #5A6675; }
+  .zona.activa b, .zona.activa span { color: #FFFFFF; }
+  .explica { border: 1.5px solid; border-radius: var(--radius); padding: 12px 16px; min-width: 0; }
+  .explica h2 { margin: 0 0 8px; font-size: 1.12rem; }
+  .explica ul { margin: 0; padding-left: 1.2em; color: #1F2937; }
+  .explica li { margin-bottom: 4px; }
+  .resumen-tipo { margin: 0; color: var(--navy); font-style: italic; }
+  table.datos td.v { text-align: right; font-weight: 700; white-space: nowrap; }
+  table.datos td.n { color: #5A6675; }
+  .nota-inv { margin: 0; color: #5A6675; font-size: .92rem; }
+  .escena .fila { align-items: start; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1426 Fundamentos de electrónica en aeromecánica</a></p>
+    <h1>Tipos de transistor y sus 3 zonas de trabajo</h1>
+    <p class="sub">UD2 · Transistores · RA2 · corte (interruptor abierto) · zona activa (amplifica) · saturación (interruptor cerrado)</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div class="zonas" id="zonas"></div>
+      <div id="circuito"></div>
+      <div class="fila">
+        <div class="explica" id="explica"></div>
+        <div id="curva"></div>
+      </div>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Mandos</h2><div class="controles" id="mandos"></div></div>
+      <div class="panel"><h2>Valores</h2><div class="tabla-wrap"><table class="datos"><tbody id="valores"></tbody></table></div></div>
+      <p class="nota-inv">Los cuatro funcionan como inversor (NOT) en la salida X. Lo que cambia es con qué nivel de entrada conducen y si conmutan la carga a masa (NPN, MOS N) o a +5 V (PNP, MOS P).</p>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Los 3 conceptos básicos</h2>
+      <ol>
+        <li><b>Corte</b> → el transistor no conduce: interruptor ABIERTO.</li>
+        <li><b>Zona activa</b> → la corriente de salida es proporcional a la de control: AMPLIFICA (interruptor «a medias»).</li>
+        <li><b>Saturación</b> → conduce todo lo que permite la carga: interruptor CERRADO.</li>
+      </ol>
+      <p>En los circuitos lógicos solo se usan el corte (un estado lógico) y la saturación (el otro).</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Tipos que se pueden elegir</h2>
+      <ul>
+        <li><b>NPN (bipolar)</b> → conduce con Vin alta; conmuta la carga a masa. Lo controla la corriente de base IB.</li>
+        <li><b>PNP (bipolar)</b> → conduce con Vin baja; conmuta la carga a +5 V. Lo controla la corriente de base IB.</li>
+        <li><b>MOSFET canal N</b> → conduce con tensión alta en la puerta; la puerta está aislada (IG = 0): lo controla la TENSIÓN.</li>
+        <li><b>MOSFET canal P</b> → conduce con 0 V en la puerta; conmuta la carga a +5 V; IG = 0.</li>
+      </ul>
+      <p class="nota-ref">Ojo con los nombres en el MOSFET: su «zona de saturación» es la que aquí llamamos zona activa, y su «zona óhmica» es la que hace de interruptor cerrado.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Cómo usarlo</h2>
+      <ul>
+        <li>Elige el tipo de transistor.</li>
+        <li>Pulsa «1 · Corte», «2 · Zona activa» o «3 · Saturación», o mueve el deslizador Vin.</li>
+        <li>«Animar» barre Vin de 0 a 5 V y vuelta.</li>
+      </ul>
+      <p class="nota-ref">Modelo: VCC = 5 V, carga R = 1 kΩ, VBE = 0,7 V y VCE(sat) = 0,2 V en los bipolares; tensión umbral VTH = 2 V en los MOSFET.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1426 · Fundamentos de electrónica en aeromecánica · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { num } = Sim;
+
+  // ── cálculo (puro) ───────────────────────────────────────────────
+  const VCC = 5.0, RL = 1000.0;          // carga (Ω)
+  const VBE_ON = 0.7, VCE_SAT = 0.2;
+  const VTH = 2.0;                        // tensión umbral del MOSFET (V)
+  const TIPOS = ["NPN (bipolar)", "PNP (bipolar)", "MOSFET canal N", "MOSFET canal P"];
+  const ZONAS = ["CORTE", "ZONA ACTIVA", "SATURACIÓN"];
+  const esBip = (tipo) => tipo.startsWith("NPN") || tipo.startsWith("PNP");
+  const esAlto = (tipo) => tipo.startsWith("PNP") || tipo.endsWith("P"); // conmuta la carga a +5 V
+
+  // p1 = β (bipolar) o k en mA/V² (MOSFET); rb en Ω. Devuelve corrientes, tensiones y zona.
+  function calcular(tipo, vin, p1, rb) {
+    const bip = esBip(tipo), alto = esAlto(tipo);
+    const vctrl = alto ? VCC - vin : vin;   // VBE / VEB / VGS / VSG
+    let ictrl, imax, pedida, zona, iout, vctrlReal;
+    if (bip) {
+      ictrl = Math.max(0, (vctrl - VBE_ON) / rb);
+      imax = (VCC - VCE_SAT) / RL;
+      pedida = p1 * ictrl;
+      if (ictrl === 0) { zona = "CORTE"; iout = 0; }
+      else if (pedida < imax) { zona = "ZONA ACTIVA"; iout = pedida; }
+      else { zona = "SATURACIÓN"; iout = imax; }
+      vctrlReal = vctrl > 0 ? Math.min(vctrl, VBE_ON) : 0;
+    } else {
+      const k = p1 / 1000;
+      ictrl = 0; imax = VCC / RL; vctrlReal = vctrl; pedida = 0;
+      if (vctrl <= VTH) { zona = "CORTE"; iout = 0; }
+      else {
+        const vov = vctrl - VTH, isat = k / 2 * vov ** 2;
+        pedida = isat;
+        if (VCC - isat * RL >= vov) { zona = "ZONA ACTIVA"; iout = isat; }
+        else {
+          const a = RL * k / 2, b = 1 + RL * k * vov;
+          const vds = (b - Math.sqrt(b * b - 4 * a * VCC)) / (2 * a);
+          zona = "SATURACIÓN"; iout = (VCC - vds) / RL;
+        }
+      }
+    }
+    const vsw = VCC - iout * RL;            // tensión en el transistor (VCE, VEC, VDS, VSD)
+    const vout = alto ? iout * RL : vsw;    // salida = nudo entre transistor y carga
+    return { bip, alto, vctrl: vctrlReal, ictrl, iout, imax, pedida, vsw, vout, zona };
+  }
+
+  const NOMBRES = { // (control, corriente de control, salida, tensión en el transistor, terminales)
+    "NPN (bipolar)": ["VBE", "IB", "IC", "VCE", ["B", "C", "E"]],
+    "PNP (bipolar)": ["VEB", "IB", "IC", "VEC", ["B", "E", "C"]],
+    "MOSFET canal N": ["VGS", "IG", "ID", "VDS", ["G", "D", "S"]],
+    "MOSFET canal P": ["VSG", "IG", "ID", "VSD", ["G", "S", "D"]],
+  };
+  const RESUMEN_TIPO = {
+    "NPN (bipolar)": "Conduce con Vin ALTA (un 1). La corriente de base IB controla la de colector IC. Conmuta la carga a masa.",
+    "PNP (bipolar)": "Conduce con Vin BAJA (un 0): la base tiene que quedar por debajo del emisor (+5 V). Conmuta la carga a +5 V.",
+    "MOSFET canal N": "Conduce con tensión ALTA en la puerta. La puerta está aislada (óxido): IG = 0, lo controla la TENSIÓN VGS.",
+    "MOSFET canal P": "Conduce con 0 V en la puerta (VSG alta). IG = 0. Conmuta la carga a +5 V.",
+  };
+
+  function explicacion(tipo, zona, r) {
+    const bip = r.bip, [v, i, o, s] = NOMBRES[tipo];
+    if (zona === "CORTE") {
+      const cond = bip ? `${v} < 0,7 V → ${i} = 0 → ${o} = 0` : `${v} < VTH = 2 V → no se forma el canal → ${o} = 0`;
+      return ["1 · CORTE: no conduce", ["No circula corriente por la carga: la lámpara está apagada.", cond,
+        `Toda la tensión cae en el transistor: ${s} ≈ 5 V.`, "Equivale a un INTERRUPTOR ABIERTO. En lógica es uno de los dos estados."]];
+    }
+    if (zona === "ZONA ACTIVA") {
+      const cond = bip ? `${o} = β · ${i}: una ${i} pequeña controla una ${o} β veces mayor.`
+        : `${o} depende de ${v}: la tensión de puerta controla la corriente (en el MOSFET esta zona se llama «de saturación»).`;
+      return ["2 · ZONA ACTIVA: amplifica", ["La corriente de salida sigue a la de control: el transistor AMPLIFICA.", cond,
+        `${s} está a medio camino: la salida no es ni un 0 ni un 1 claro.`, "Equivale a un interruptor «A MEDIAS». Se usa en amplificadores, no en lógica."]];
+    }
+    const cond = bip ? `La base pide más de lo que permite la carga (β · ${i} > ${o} máx.): ${o} queda limitada por la carga.`
+      : `${v} muy por encima de VTH: el canal conduce del todo (en el MOSFET se llama «zona óhmica»).`;
+    return ["3 · SATURACIÓN: conduce del todo", ["Pasa toda la corriente que permite la carga: la lámpara luce al máximo.", cond,
+      `En el transistor casi no cae tensión: ${s} ≈ ${num(r.vsw, 2)} V.`, "Equivale a un INTERRUPTOR CERRADO. En lógica es el otro estado."]];
+  }
+
+  // Filas del panel «Valores» (el Python escribía los decimales con punto)
+  function filas(tipo, vin, r) {
+    const [v, i, o, s] = NOMBRES[tipo];
+    const f = [[v, `${num(r.vctrl, 2)} V`, "ctrl"], [i + (r.bip ? "" : " (puerta)"), `${num(r.ictrl * 1e3, 3)} mA`, "ctrl"],
+      [o, `${num(r.iout * 1e3, 2)} mA`, "out"], [`${o} máx. (carga)`, `${num(r.imax * 1e3, 2)} mA`, ""],
+      [s, `${num(r.vsw, 2)} V`, ""], ["Salida X", `${num(r.vout, 2)} V`, "out"]];
+    if (r.bip) f.splice(3, 0, [`β · ${i}`, `${num(r.pedida * 1e3, 2)} mA`, ""]);
+    const lin = vin >= 2.0 ? "1" : (vin <= 0.8 ? "0" : "?");
+    const lout = r.vout >= 2.0 ? "1" : (r.vout <= 0.8 ? "0" : "?");
+    f.push(["Lógica A → X", `${lin} → ${lout}`, "navy"]);
+    return f;
+  }
+
+  // Vin representativo de cada zona para el tipo y los parámetros actuales (null si esa zona no existe)
+  function vinPara(tipo, zona, p1, rb) {
+    const xs = [];
+    for (let j = 0; j <= 100; j++) { const v = Number((j * 0.05).toFixed(2)); if (calcular(tipo, v, p1, rb).zona === zona) xs.push(v); }
+    if (!xs.length) return null;
+    const alto = esAlto(tipo);
+    if (zona === "ZONA ACTIVA") return xs[Math.floor(xs.length / 2)];
+    if (zona === "CORTE") return alto ? 5.0 : 0.0;
+    return alto ? 0.0 : 5.0;
+  }
+  // ── fin cálculo ──────────────────────────────────────────────────
+
+  const COL = { "CORTE": "#5F5E5A", "ZONA ACTIVA": "#BA7517", "SATURACIÓN": "#0F6E56" };
+  const FONDO = { "CORTE": "#F1EFE8", "ZONA ACTIVA": "#FAEEDA", "SATURACIÓN": "#E1F5EE" };
+  const C_CTRL = "#D85A30", C_OUT = "#185FA5", NAVY = "#0A1F3C", GRIS = "#5A6675", HILO = "#2C2C2A";
+  const COLFILA = { ctrl: C_CTRL, out: C_OUT, navy: NAVY, "": HILO };
+  const P1 = { bip: { label: "β (ganancia)", vmin: 20, vmax: 300, val: 100, step: 5 },
+    mos: { label: "k (mA/V²)", vmin: 1, vmax: 40, val: 10, step: 1 } };
+
+  let tipo = TIPOS[0], vin = 0, p1 = 100, rbk = 10, R = calcular(tipo, vin, p1, rbk * 1000);
+
+  // ═══ Circuito ═══
+  const XMAX = 11, Y0 = 0.6, Y1 = 10.2;
+  const lCirc = new Sim.Lienzo("#circuito", {
+    proporcion: (Y1 - Y0) / XMAX, altoMax: 600, etiqueta: "Circuito con el transistor, la carga, la entrada A y la salida X",
+    dibujar(ctx, w, h) {
+      const k = Math.min(w / XMAX, h / (Y1 - Y0)), ox = (w - XMAX * k) / 2;
+      const X = (x) => ox + x * k, Y = (y) => (Y1 - y) * k;
+      const tam = Math.max(10, Math.min(15, k * 0.3));
+      const T = (s, x, y, e = {}) => Sim.texto(ctx, s, X(x), Y(y), Object.assign({ tam }, e));
+      const hilo = (xs, ys, ancho = 2, color = HILO) => Sim.polilinea(ctx, xs.map((x, i) => [X(x), Y(ys[i])]), { color, ancho });
+      const poli = (pts, color) => { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)))); ctx.closePath(); ctx.fill(); ctx.restore(); };
+      const rect = (x, y, ww, hh, relleno, borde) => Sim.caja(ctx, X(x), Y(y + hh), ww * k, hh * k, { radio: 0, relleno, color: borde, ancho: 1.5 });
+      const resistorV = (x, y0, y1, label) => {
+        const hh = (y1 - y0) * 0.6, ym = (y0 + y1) / 2;
+        hilo([x, x], [y1, ym + hh / 2]); hilo([x, x], [ym - hh / 2, y0]);
+        rect(x - 0.22, ym - hh / 2, 0.44, hh, "#FAC775", "#BA7517");
+        T(label, x + 0.38, ym, { base: "middle" });
+      };
+      const masa = (x, y) => { hilo([x, x], [y + 0.3, y]); [0.42, 0.28, 0.14].forEach((wd, j) => hilo([x - wd, x + wd], [y - j * 0.12, y - j * 0.12])); };
+      const lampara = (x, y) => {
+        const br = Math.min(1, R.iout / R.imax);
+        const fill = br > 0.02 ? `rgb(255,${Math.round(255 * (0.93 - 0.25 * br))},${Math.round(255 * (0.55 - 0.45 * br))})` : "#F1EFE8";
+        Sim.circulo(ctx, X(x), Y(y), 0.42 * k, { relleno: fill, color: "#444441", ancho: 1.5 });
+        const d = 0.28;
+        hilo([x - d, x + d], [y - d, y + d], 1.2, "#444441"); hilo([x - d, x + d], [y + d, y - d], 1.2, "#444441");
+        T("carga\n(lámpara)", x + 0.6, y + 0.12, { tam: tam - 2, color: GRIS, base: "middle" });
+      };
+      const flechaG = (x, y, dx, dy, i, imax, color) => { // flecha ancha (FancyArrow) con grosor según la corriente
+        if (i <= 1e-9) return;
+        const wd = 0.05 + 0.22 * Math.min(1, i / imax), hw = wd * 2.6 + 0.12, hl = 0.28;
+        const L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, px = -uy, py = ux, b = L - hl;
+        poli([[x + px * wd / 2, y + py * wd / 2], [x + ux * b + px * wd / 2, y + uy * b + py * wd / 2], [x + ux * b + px * hw / 2, y + uy * b + py * hw / 2],
+          [x + dx, y + dy], [x + ux * b - px * hw / 2, y + uy * b - py * hw / 2], [x + ux * b - px * wd / 2, y + uy * b - py * wd / 2], [x - px * wd / 2, y - py * wd / 2]], color + "E6");
+      };
+
+      const bip = esBip(tipo), alto = esAlto(tipo), z = R.zona;
+      const xt = 6.0, yt = 5.6, xc = 6.6;
+      hilo([5.3, 7.8], [9.6, 9.6], 3, "#A32D2D");
+      T("+5 V", 7.95, 9.6, { negrita: true, color: "#A32D2D", base: "middle", tam: tam + 1 });
+      let ynodo, outArrow;
+      if (!alto) { // carga arriba, transistor a masa (NPN, MOS N)
+        resistorV(xc, 8.35, 9.6, "R = 1 kΩ"); lampara(xc, 7.75);
+        hilo([xc, xc], [8.35, 8.17]); hilo([xc, xc], [7.33, yt + 0.85]);
+        hilo([xc, xc], [yt - 0.85, 2.3]); masa(xc, 2.0);
+        ynodo = 7.0; outArrow = [xc - 0.85, 9.35, 0, -1.6];
+      } else { // transistor arriba, carga a masa (PNP, MOS P)
+        hilo([xc, xc], [9.6, yt + 0.85]); hilo([xc, xc], [yt - 0.85, 3.95]);
+        lampara(xc, 3.53); hilo([xc, xc], [3.11, 2.95]); resistorV(xc, 1.75, 2.95, "R = 1 kΩ");
+        masa(xc, 1.45);
+        ynodo = 4.25; outArrow = [xc - 0.85, 4.55, 0, -1.4];
+      }
+      // símbolo del transistor
+      Sim.circulo(ctx, X(xt), Y(yt), 0.95 * k, { relleno: FONDO[z], color: HILO, ancho: 2 });
+      const [tc, tsup, tinf] = NOMBRES[tipo][4];
+      if (bip) {
+        hilo([xt - 0.45, xt - 0.45], [yt - 0.55, yt + 0.55], 4);
+        hilo([xt - 0.45, xc], [yt + 0.28, yt + 0.85]); hilo([xt - 0.45, xc], [yt - 0.28, yt - 0.85]);
+        if (tipo.startsWith("NPN")) { const [tx, ty] = [xc, yt - 0.85]; poli([[tx, ty], [tx - 0.36, ty + 0.07], [tx - 0.18, ty + 0.31]], HILO); }
+        else { const [tx, ty] = [xt - 0.2, yt + 0.42]; poli([[tx, ty], [tx + 0.34, ty + 0.05], [tx + 0.14, ty + 0.3]], HILO); }
+        hilo([xt - 1.6, xt - 0.45], [yt, yt]);
+      } else {
+        const xg = xt - 0.55, xch = xt - 0.3;
+        hilo([xg, xg], [yt - 0.55, yt + 0.55], 3);
+        for (const y0 of [yt + 0.35, yt - 0.1, yt - 0.55]) hilo([xch, xch], [y0, y0 + 0.22], 3);
+        for (const yy of [yt + 0.45, yt - 0.45]) hilo([xch, xc], [yy, yy]);
+        hilo([xc, xc], [yt + 0.45, yt + 0.85]); hilo([xc, xc], [yt - 0.45, yt - 0.85]);
+        hilo([xch, xc - 0.05], [yt, yt], 1.5);
+        if (tipo.endsWith("N")) poli([[xch + 0.05, yt], [xch + 0.33, yt + 0.12], [xch + 0.33, yt - 0.12]], HILO);
+        else poli([[xc - 0.1, yt], [xc - 0.38, yt + 0.12], [xc - 0.38, yt - 0.12]], HILO);
+        hilo([xt - 1.6, xg], [yt, yt]);
+        T("aislada", xg - 0.1, yt - 0.85, { tam: tam - 3, color: GRIS, alin: "right" });
+      }
+      T(tc, xt - 0.95, yt + 0.6, { negrita: true, tam: tam + 1 });
+      T(tsup, xc + 0.15, yt + 1.0, { negrita: true, tam: tam + 1 });
+      T(tinf, xc + 0.15, yt - 1.2, { negrita: true, tam: tam + 1 });
+      // salida
+      hilo([xc, 8.6], [ynodo, ynodo]);
+      Sim.circulo(ctx, X(xc), Y(ynodo), 3.5, { relleno: HILO, color: null });
+      Sim.circulo(ctx, X(8.6), Y(ynodo), 5, { relleno: "#FFFFFF", color: HILO, ancho: 1.5 });
+      T("Salida X", 8.85, ynodo + 0.42, { tam: tam - 1, color: GRIS });
+      T(`X = ${num(R.vout, 2)} V`, 8.85, ynodo - 0.12, { negrita: true, color: C_OUT, base: "middle", tam: tam + 1 });
+      // entrada
+      const xin = 1.0;
+      if (bip) {
+        hilo([3.9, xt - 1.6], [yt, yt]);
+        rect(2.35, yt - 0.22, 1.55, 0.44, "#FAC775", "#BA7517");
+        T(`Rb = ${(rbk).toFixed(0)} kΩ`, 3.12, yt + 0.42, { alin: "center" });
+        hilo([xin, 2.35], [yt, yt]);
+      } else {
+        hilo([xin, xt - 1.6], [yt, yt]);
+        T("IG = 0 (puerta aislada)", 3.3, yt - 0.55, { alin: "center", color: C_CTRL, tam: tam - 1 });
+      }
+      Sim.circulo(ctx, X(xin), Y(yt - 1.4), 0.5 * k, { relleno: "#FFFFFF", color: HILO, ancho: 1.8 });
+      T("Vin", xin, yt - 1.4, { negrita: true, alin: "center", base: "middle", tam: tam - 1 });
+      hilo([xin, xin], [yt - 0.9, yt]); hilo([xin, xin], [yt - 1.9, 2.3]); masa(xin, 2.0);
+      T("Entrada A", 0.05, yt + 1.15, { tam: tam - 1, color: GRIS });
+      T(`Vin = ${num(vin, 2)} V`, 0.05, yt + 0.62, { negrita: true, color: C_CTRL, tam: tam + 1 });
+      // flechas de corriente (grosor según la corriente)
+      if (bip) flechaG(1.6, yt - 0.45, 1.6, 0, R.ictrl, R.imax / 20, C_CTRL);
+      flechaG(...outArrow, R.iout, R.imax, C_OUT);
+      // interruptor equivalente
+      const xs = 8.75, ys0 = 1.35, ys1 = 2.3;
+      T("Equivalente", xs + 0.45, 2.9, { tam: tam - 2, color: GRIS, alin: "center" });
+      hilo([xs, xs], [ys1, ys1 + 0.35]); hilo([xs, xs], [ys0 - 0.35, ys0]);
+      Sim.circulo(ctx, X(xs), Y(ys1), 2.5, { relleno: HILO, color: null }); Sim.circulo(ctx, X(xs), Y(ys0), 2.5, { relleno: HILO, color: null });
+      const palanca = z === "SATURACIÓN" ? [[xs, xs], [ys0, ys1]] : (z === "CORTE" ? [[xs, xs + 0.55], [ys0, ys1 - 0.1]] : [[xs, xs + 0.27], [ys0, ys1 - 0.03]]);
+      hilo(palanca[0], palanca[1], 2.5);
+      T({ "SATURACIÓN": "cerrado", "CORTE": "abierto", "ZONA ACTIVA": "a medias" }[z], xs + 0.45, 0.75, { tam: tam - 2, negrita: true, color: COL[z], alin: "center" });
+    },
+  });
+
+  // ═══ Curva de transferencia ═══
+  const VV = Sim.linspace(0, 5, 501);
+  let curva = null, claveCurva = "";
+  const lCurva = new Sim.Lienzo("#curva", {
+    proporcion: 0.62, altoMin: 240, altoMax: 340, etiqueta: "Curva de transferencia de la salida X frente a Vin con las zonas sombreadas",
+    dibujar(ctx, w, h, L) {
+      const clave = `${tipo}|${p1}|${rbk}`;
+      if (clave !== claveCurva) { curva = VV.map((v) => calcular(tipo, v, p1, rbk * 1000)); claveCurva = clave; }
+      const ej = new Sim.Ejes(L, ctx, { xlim: [0, 5], ylim: [-0.2, 5.4], xticks: [0, 1, 2, 3, 4, 5], yticks: [0, 1, 2, 3, 4, 5], xlabel: "Vin (V)", ylabel: "Salida X (V)", titulo: "Curva de transferencia (zonas sombreadas)" });
+      ej.marco();
+      for (const z of ZONAS) {
+        const xs = VV.filter((_, i) => curva[i].zona === z);
+        if (!xs.length) continue;
+        const a = ej.px(Math.min(...xs)), b = ej.px(Math.max(...xs));
+        ctx.save(); ctx.globalAlpha = 0.10; ctx.fillStyle = COL[z]; ctx.fillRect(a, ej.y0, b - a, ej.alto); ctx.restore();
+      }
+      ej.linea(VV, curva.map((r) => r.vout), { color: NAVY, ancho: 2.2 });
+      ej.punto(vin, R.vout, { color: "#F2A93B", borde: NAVY, radio: 7 });
+    },
+  });
+
+  // ═══ Paneles HTML ═══
+  const zonasEl = document.getElementById("zonas"), explicaEl = document.getElementById("explica");
+  const valoresEl = document.getElementById("valores");
+  function actualizar() {
+    R = calcular(tipo, vin, p1, rbk * 1000);
+    const z = R.zona;
+    zonasEl.innerHTML = ZONAS.map((zz, k) => {
+      const act = zz === z;
+      return `<div class="zona${act ? " activa" : ""}" style="border-color:${COL[zz]};${act ? `background:${COL[zz]};border-width:2px` : ""}">` +
+        `<b style="color:${act ? "#fff" : COL[zz]}">${["1 · Corte", "2 · Zona activa", "3 · Saturación"][k]}</b><span>${["abierto", "amplifica", "cerrado"][k]}</span></div>`;
+    }).join("");
+    const [tit, lineas] = explicacion(tipo, z, R);
+    explicaEl.style.background = FONDO[z]; explicaEl.style.borderColor = COL[z];
+    explicaEl.innerHTML = `<h2 style="color:${COL[z]}">${tit}</h2><ul>${lineas.map((l) => `<li>${l}</li>`).join("")}</ul>`;
+    valoresEl.innerHTML = filas(tipo, vin, R).map(([a, b, c]) => `<tr><td class="n">${a}</td><td class="v" style="color:${COLFILA[c]}">${b}</td></tr>`).join("");
+    lCirc.pedir(); lCurva.pedir();
+  }
+
+  // ═══ Mandos ═══
+  Sim.opciones("#mandos", { titulo: "Tipo de transistor", etiquetas: TIPOS, activa: 0, alCambiar: (i) => cambiarTipo(TIPOS[i]) });
+  const resumen = Sim.el("p", { class: "resumen-tipo" });
+  document.getElementById("mandos").append(resumen);
+  const dVin = Sim.deslizador("#mandos", { etiqueta: "Vin (V)", min: 0, max: 5, valor: 0, paso: 0.05, formato: (v) => num(v, 2), alCambiar: (v) => { vin = v; actualizar(); } });
+  const dP1 = Sim.deslizador("#mandos", { etiqueta: "β (ganancia)", min: 20, max: 300, valor: 100, paso: 5, formato: (v) => num(v, 0), alCambiar: (v) => { p1 = v; actualizar(); } });
+  const dRb = Sim.deslizador("#mandos", { etiqueta: "Rb (kΩ)", min: 1, max: 200, valor: 10, paso: 1, formato: (v) => num(v, 0), alCambiar: (v) => { rbk = v; actualizar(); } });
+  function fijarVin(v) { vin = v; dVin.valor = v; actualizar(); }
+  ZONAS.forEach((z, i) => Sim.boton("#mandos", ["1 · Corte", "2 · Zona activa", "3 · Saturación"][i], () => {
+    const v = vinPara(tipo, z, p1, rbk * 1000); if (v !== null) fijarVin(v);
+  }));
+  let dir = 1, acum = 0;
+  const anim = Sim.animar((dt) => {
+    acum += dt;
+    let v = vin;
+    while (acum >= 0.06) { // un paso de 0,05 V cada 60 ms, como el temporizador del Python
+      acum -= 0.06; v += 0.05 * dir;
+      if (v >= 5.0 || v <= 0.0) { dir *= -1; v = Math.min(5, Math.max(0, v)); }
+      v = Math.round(v * 100) / 100;
+    }
+    if (v !== vin) fijarVin(v);
+  });
+  const bAnim = Sim.boton("#mandos", "Animar", () => {
+    if (anim.activo) { anim.parar(); bAnim.textContent = "Animar"; } else { acum = 0; anim.arrancar(); bAnim.textContent = "Parar"; }
+  }, { primario: true });
+
+  function cambiarTipo(t) {
+    tipo = t;
+    const bip = esBip(t), cfg = P1[bip ? "bip" : "mos"];
+    dP1.caja.querySelector(".etq").textContent = cfg.label;
+    Object.assign(dP1.input, { min: cfg.vmin, max: cfg.vmax, step: cfg.step });
+    dP1.valor = cfg.val; p1 = cfg.val;
+    dRb.caja.querySelector(".etq").textContent = bip ? "Rb (kΩ)" : "Rb (no se usa)";
+    dRb.desactivar(!bip);
+    resumen.textContent = `${t}: ${RESUMEN_TIPO[t]}`;
+    vin = vinPara(t, "CORTE", p1, rbk * 1000); dVin.valor = vin;
+    actualizar();
+  }
+  cambiarTipo(TIPOS[0]);
+})();
+</script>
+</body>
+</html>

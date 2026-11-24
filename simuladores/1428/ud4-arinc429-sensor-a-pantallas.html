@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Mueve la altitud y la velocidad que miden las sondas y mira cómo llegan a la PFD, la MCDU y el transpondedor.">
+<title>Del sensor a la pantalla por un bus ARINC 429 · 1428</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .fig { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; min-width: 0; display: grid; gap: 8px; }
+  .fig > h2 { margin: 0; font-family: var(--serif); font-size: 1.05rem; color: var(--navy); }
+  .fig .lienzo { border: 0; border-radius: 0; }
+  .fig .nota-ref { margin: 0; }
+  @media (max-width: 520px) { .fig { padding: 10px 8px; } }
+  .pasos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .pasos li { border: 1px solid #D9E0E8; background: #F3F6FA; border-radius: 10px; padding: 8px 10px; color: #5A6675; min-width: 0; }
+  .pasos li b { display: block; font-size: 1rem; }
+  .pasos li span { font-size: .9rem; }
+  .pasos li.on { border: 2px solid #C4821E; background: #FAEEDA; color: #1F2937; padding: 7px 9px; }
+  .pasos li.on b { color: #0A1F3C; }
+  @media (max-width: 620px) { .pasos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .aviso-rojo { margin: 0; background: #FCEBEB; border: 1px solid #A32D2D; color: #A32D2D; font-weight: 700; border-radius: 8px; padding: 8px 12px; }
+  .info p { margin: 0 0 4px; }
+  .info .etq { font-size: 1.45rem; font-weight: 700; color: #C4821E; margin-bottom: 2px; }
+  .info .gris { color: var(--muted); font-size: .92rem; }
+  .info .fuerte { color: var(--navy); font-weight: 700; }
+  .info .rojo { color: #A32D2D; font-weight: 700; }
+  .info .verde { color: #0F6E56; font-weight: 700; }
+  .info .sep { margin-top: 10px; }
+  .grupo-titulo.sensores { margin: 0; font-weight: 700; color: var(--navy); }
+  .btn.ruido { background: #FCEBEB; border-color: #E9B9B9; }
+  .btn.fallo { background: #FAEEDA; border-color: #E8C58C; }
+  .btn.ancho { flex: 1 1 100%; }
+  @media (max-width: 900px) {
+    .sim > .escena, .sim > .lateral { display: contents; }
+    #f-pasos { order: 1; } #f-esquema { order: 2; } #t-mandos { order: 3; } #f-pantallas { order: 4; } #f-senal { order: 5; } #t-info { order: 6; }
+  }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1428 Técnicas digitales y sistemas de instrumentos electrónicos</a></p>
+    <h1>Del sensor a la pantalla: un bus ARINC 429 en el avión</h1>
+    <p class="sub">UD4 · Buses de datos · el ADC transmite altitud, velocidad y Mach; la PFD, el FMC (MCDU) y el transpondedor los reciben por el mismo par de cables (apuntes, págs. 4-12)</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div class="fig" id="f-pasos">
+        <ol class="pasos" id="pasos">
+          <li><b>1 · Sensor</b><span>las sondas miden presiones</span></li>
+          <li><b>2 · ADC</b><span>convierte a digital y crea la palabra</span></li>
+          <li><b>3 · Bus ARINC 429</b><span>la palabra viaja bit a bit</span></li>
+          <li><b>4 · Receptores</b><span>cada uno coge lo que necesita</span></li>
+        </ol>
+      </div>
+      <div class="fig" id="f-esquema">
+        <div class="lienzo" id="esquema"></div>
+        <p class="aviso-rojo" id="aviso-resp" hidden>NO SE PUEDE: el bus ARINC 429 tiene una sola fuente (el ADC) y va en un solo sentido; la información nunca puede llegar a un puerto transmisor. Si la PFD tuviera que enviar algo al ADC, haría falta otro bus independiente en el que la PFD fuera la fuente.</p>
+      </div>
+      <div class="fig" id="f-pantallas">
+        <h2>Lo que muestra cada receptor</h2>
+        <div class="lienzo" id="pantallas"></div>
+      </div>
+      <div class="fig" id="f-senal">
+        <h2 id="tit-senal"></h2>
+        <div class="lienzo" id="senal"></div>
+      </div>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta" id="t-mandos"><h2>Mandos</h2>
+        <p class="grupo-titulo sensores">Lo que miden los sensores:</p>
+        <div class="controles" id="sensores"></div>
+        <div class="controles" id="mandos"></div>
+        <p class="nota-ref">Las pantallas solo cambian cuando les llega la palabra con el dato nuevo.</p>
+      </div>
+      <div class="panel info" id="t-info"><h2>Palabra que envía el ADC</h2><div id="info"></div></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué se ve, en 4 pasos</h2>
+      <ol>
+        <li>Las sondas pitot y estática miden presiones (la altitud y la velocidad del avión).</li>
+        <li>El ADC (Air Data Computer, ordenador de datos de aire) convierte esas medidas a digital y crea las palabras ARINC 429: etiqueta 203 (altitud), 206 (velocidad CAS) y 205 (número de Mach).</li>
+        <li>Las palabras viajan por el bus, bit a bit (bipolar RZ), desde una sola fuente hacia todos los receptores.</li>
+        <li>Cada receptor coge solo las etiquetas que necesita, comprueba la paridad y lo muestra: la PFD (Primary Flight Display) la velocidad, la altitud y el Mach; el FMC (Flight Management Computer), en la MCDU, la altitud, la velocidad y el Mach; el transpondedor, solo la altitud, que envía al radar del control aéreo (ATC).</li>
+      </ol>
+    </div>
+    <div class="tarjeta">
+      <h2>Cómo usarlo</h2>
+      <ul>
+        <li>Mueve los deslizadores de altitud y velocidad (lo que «mide» el sensor). Las pantallas no cambian al momento: cambian cuando les llega la palabra con el dato nuevo.</li>
+        <li>«Ruido en la próxima palabra»: llega un bit cambiado; los receptores lo detectan por la paridad, descartan la palabra y mantienen el último valor bueno.</li>
+        <li>«Fallo del ADC»: las palabras salen con SSM = 00 (aviso de fallo) y las pantallas muestran banderas de fallo.</li>
+        <li>«¿Puede la PFD pedir datos al ADC?»: el bus es unidireccional; para hablar al ADC haría falta otro bus.</li>
+        <li>«Ritmo»: bit a bit (para explicar la señal) o rápido (para ver cómo se actualizan las pantallas). «Pausa» y «Siguiente bit» permiten ir de uno en uno.</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Datos de la simulación</h2>
+      <p>Etiquetas: asignación habitual de ARINC 429 para datos de aire. Escalas, pantallas y valores: simplificados para la clase. El número de Mach se calcula con la atmósfera estándar a partir de la altitud y la velocidad CAS.</p>
+      <p class="nota-ref">Apuntes de la UD4, págs. 4-12.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1428 · Técnicas digitales y sistemas de instrumentos electrónicos en aeromecánica · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  // ── CÁLCULO (inicio)
+  // etiqueta, clave, nombre, unidad, escala BNR, bits de datos
+  const PALABRAS = [
+    ["203", "alt", "Altitud", "ft", 131072, 17],
+    ["206", "cas", "Velocidad (CAS)", "kt", 1024, 14],
+    ["205", "mach", "Número de Mach", "", 4.096, 16],
+  ];
+  const RECEPTORES = [ // nombre, etiquetas que usa, x de conexión (coordenadas del Python, 0-100)
+    ["PFD", ["203", "205", "206"], 46.5],
+    ["FMC / MCDU", ["203", "205", "206"], 68],
+    ["Transpondedor", ["203"], 89],
+  ];
+  const GAP = 4;
+
+  // round() del Python: redondeo al par en los empates
+  function roundPy(x) {
+    if (Math.abs(x % 1) === 0.5) return 2 * Math.round(x / 2);
+    return Math.round(x);
+  }
+  // Atmósfera estándar: número de Mach a partir de la CAS (kt) y la altitud (ft)
+  function machDe(casKt, altFt) {
+    const p0 = 101325.0, a0 = 340.294;
+    const h = altFt * 0.3048;
+    const p = h <= 11000 ? p0 * (1 - 2.25577e-5 * h) ** 5.25588 : 22632.0 * Math.exp(-(h - 11000) / 6341.6);
+    const v = casKt * 0.514444;
+    const qc = p0 * ((1 + 0.2 * (v / a0) ** 2) ** 3.5 - 1);
+    return Math.sqrt(5 * ((qc / p + 1) ** (2 / 7) - 1));
+  }
+  // miles() del Python: entero con punto de millares
+  const miles = (x) => String(roundPy(x)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const machTxt = (m) => "." + String(roundPy(m * 1000)).padStart(3, "0");
+  const bin = (v, n) => v.toString(2).padStart(n, "0");
+
+  function codificar(i, valores, fallo) {
+    const [etq, clave, , , esc, nb] = PALABRAS[i];
+    const b = new Array(33).fill(0);
+    const d = etq.split("").map(Number);
+    const eb = bin(d[0], 2) + bin(d[1], 3) + bin(d[2], 3);
+    for (let k = 0; k < 8; k++) b[1 + k] = Number(eb[k]);               // MSB de la etiqueta en el bit 1
+    const n = roundPy(valores[clave] / esc * 2 ** nb) & ((1 << (nb + 1)) - 1);
+    for (let k = 0; k <= nb; k++) b[29 - nb + k] = (n >> k) & 1;
+    if (fallo) { b[30] = 0; b[31] = 0; } else { b[30] = 1; b[31] = 1; }  // SSM BNR: 00 aviso de fallo · 11 operación normal
+    let u = 0; for (let k = 1; k <= 31; k++) u += b[k];
+    b[32] = u % 2 === 0 ? 1 : 0;
+    return b;
+  }
+  const campo = (bit) => (bit <= 8 ? "ETIQUETA" : bit <= 10 ? "SDI" : bit <= 29 ? "DATOS" : bit <= 31 ? "SSM" : "P");
+
+  function estadoInicial(alt, cas) {
+    const pant = {}, rx = {}, flash = {};
+    for (const [nom] of RECEPTORES) {
+      pant[nom] = { alt: null, cas: null, mach: null, fallo: new Set() };
+      rx[nom] = ["", "gris"];
+      flash[nom] = [0, "ok"];
+    }
+    return { i: 0, bit: 0, pausa: false, rapido: false, ruidoProx: false, ruido: null, fallo: false,
+      responder: false, muestra: null, cuenta: 0, alt, cas, pant, rx, flash };
+  }
+  const valoresSensor = (st) => ({ alt: st.alt, cas: st.cas, mach: machDe(st.cas, st.alt) });
+
+  function palabraActual(st) {
+    const b = codificar(st.i, st.muestra, st.muestra.fallo);
+    if (st.ruido !== null) b[st.ruido] = 1 - b[st.ruido];
+    return b;
+  }
+
+  function recibir(st, b) {
+    let e = 0; for (let k = 1; k <= 8; k++) e = (e << 1) | b[k];
+    const etqO = e.toString(8).padStart(3, "0");
+    let u = 0; for (let k = 1; k <= 32; k++) u += b[k];
+    const parOk = u % 2 === 1;
+    const p = PALABRAS.find((x) => x[0] === etqO);
+    const clave = parOk && p ? p[1] : null;
+    const ssm = (b[31] << 1) | b[30];
+    for (const [nom, etqs] of RECEPTORES) {
+      const pant = st.pant[nom];
+      if (!parOk) { st.rx[nom] = ["error de paridad:\nla descarta", "mal"]; st.flash[nom] = [6, "mal"]; }
+      else if (!etqs.includes(etqO)) st.rx[nom] = [`ignora la ${etqO}`, "gris"];
+      else if (ssm === 0) {
+        pant.fallo.add(clave);
+        st.rx[nom] = [`${etqO}: SSM de fallo`, "mal"]; st.flash[nom] = [6, "mal"];
+      } else {
+        pant.fallo.delete(clave);
+        pant[clave] = st.muestra[clave];
+        st.rx[nom] = [`acepta la ${etqO} ✓`, "ok"]; st.flash[nom] = [6, "ok"];
+      }
+    }
+  }
+
+  function nuevaPalabra(st, azar = Math.random) {
+    st.muestra = Object.assign(valoresSensor(st), { fallo: st.fallo });   // el ADC toma la medida al empezar la palabra
+    st.ruido = st.ruidoProx ? 11 + Math.floor(azar() * 18) : null;        // bits 11 a 28
+    st.ruidoProx = false;
+  }
+
+  function avanzar(st, n = 1, azar = Math.random) {
+    for (let j = 0; j < n; j++) {
+      st.bit += 1;
+      for (const r in st.flash) st.flash[r] = [Math.max(0, st.flash[r][0] - 1), st.flash[r][1]];
+      if (st.bit === 32) {
+        recibir(st, palabraActual(st)); st.cuenta += 1;
+        for (const r in st.flash) st.flash[r] = [st.flash[r][0] + (st.rapido ? 3 * GAP : GAP), st.flash[r][1]];   // que el marco se vea durante el gap
+      }
+      if (st.bit >= 32 + GAP) {
+        st.bit = 0;
+        st.i = (st.i + 1) % PALABRAS.length;
+        nuevaPalabra(st, azar);
+      }
+    }
+  }
+  // ── CÁLCULO (fin)
+
+  const NAVY = "#0A1F3C", GRIS = "#5A6675", TXT = "#1F2937", AMB = "#F2A93B", AMB2 = "#C4821E";
+  const OK_E = "#0F6E56", ER_F = "#FCEBEB", ER_E = "#A32D2D";
+  const LA = "#A32D2D", LB = "#185FA5", VERDE = "#3DDC84";
+  const COL = { ok: OK_E, mal: ER_E, gris: GRIS };
+  const CAMPO = { ETIQUETA: "#FAEEDA", SDI: "#E6F1FB", DATOS: "#E1F5EE", SSM: "#EEEDFE", P: "#F2A93B" };
+  const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  const st = estadoInicial(35000, 280);
+  nuevaPalabra(st);
+
+  function lienzoAdaptable(cont, o, altoDe) {
+    const L = new Sim.Lienzo(cont, o);
+    const ajustar = L._ajustar.bind(L);
+    L._ajustar = () => { const w = Math.max(50, L.canvas.parentElement.clientWidth); L.proporcion = altoDe(w) / w; ajustar(); };
+    L._ajustar();
+    return L;
+  }
+  const T = (ctx, s, x, y, e) => Sim.texto(ctx, s, x, y, e);
+  function triangulo(ctx, pts, relleno, borde) {
+    Sim.polilinea(ctx, pts, { cerrar: true, relleno, color: borde || relleno, ancho: 0.8 });
+  }
+  function rect(ctx, x, y, w, h, relleno, borde, ancho = 1.5) {
+    ctx.save();
+    if (relleno) { ctx.fillStyle = relleno; ctx.fillRect(x, y, w, h); }
+    if (borde) { ctx.strokeStyle = borde; ctx.lineWidth = ancho; ctx.strokeRect(x, y, w, h); }
+    ctx.restore();
+  }
+
+  // ── Esquema: sensores → ADC → bus → receptores (horizontal en pantalla ancha, vertical en el móvil)
+  const ESTRECHO = 760;
+  const lienzoEsq = lienzoAdaptable("#esquema", { etiqueta: "Esquema: sondas, ADC, bus ARINC 429 y tres receptores" },
+    (w) => (w < ESTRECHO ? 520 : Math.max(320, w * 0.33)));
+  lienzoEsq.o.dibujar = (ctx, w, h) => {
+    if (w < ESTRECHO) return esquemaVertical(ctx, w, h);
+    const X = (x) => x / 100 * w, Y = (y) => (49.5 - y) / 31 * h;   // coordenadas del Python (x 0-100, y 18,5-49,5)
+    const m = st.muestra;
+    const g = w >= 1000 ? 1 : 0.9;
+    // sensores: sondas pitot y estática
+    Sim.caja(ctx, X(0.5), Y(46), X(13), Y(24) - Y(46), { relleno: "#F3F6FA", color: GRIS, ancho: 1.4 });
+    T(ctx, "SENSORES", X(7), Y(43.3), { tam: 14 * g, negrita: true, alin: "center", color: NAVY });
+    T(ctx, "sondas pitot\ny estática", X(7), Y(40.9), { tam: 11 * g, alin: "center", color: GRIS });
+    Sim.polilinea(ctx, [[X(2.5), Y(35.5)], [X(9.5), Y(35.5)], [X(9.5), Y(33)]], { color: "#444", ancho: 4 });
+    T(ctx, "pitot", X(2.2), Y(36.6), { tam: 10.5 * g, color: GRIS });
+    Sim.polilinea(ctx, [[X(2.5), Y(30.5)], [X(11.5), Y(30.5)]], { color: "#888", ancho: 1.5 });
+    for (const xx of [5, 6.5, 8]) Sim.circulo(ctx, X(xx), Y(30.5), 3.5, { relleno: "#444", color: null });
+    T(ctx, "toma estática", X(2.2), Y(28.6), { tam: 10.5 * g, color: GRIS });
+    T(ctx, `${miles(st.alt)} ft\n${roundPy(st.cas)} kt`, X(7), Y(26.6), { tam: 13 * g, negrita: true, alin: "center", color: TXT });
+    Sim.flecha(ctx, X(13.6), Y(35), X(17.4), Y(35), { color: GRIS, ancho: 1.6, punta: 8 });
+    T(ctx, "presiones", X(15.5), Y(36.4), { tam: 10 * g, alin: "center", color: GRIS });
+    // ADC
+    Sim.caja(ctx, X(17.5), Y(48), X(16), Y(22) - Y(48), { relleno: "#E6F1FB", color: NAVY, ancho: 1.8 });
+    T(ctx, "ADC", X(25.5), Y(45.4), { tam: 17 * g, negrita: true, alin: "center", color: NAVY });
+    T(ctx, "Air Data Computer", X(25.5), Y(43.1), { tam: 11 * g, alin: "center", color: GRIS });
+    T(ctx, "(única fuente del bus)", X(25.5), Y(41.0), { tam: 11 * g, alin: "center", color: GRIS });
+    const [etq, clave, nombre, ud] = PALABRAS[st.i];
+    const vtxt = clave === "mach" ? machTxt(m[clave]) : `${miles(m[clave])} ${ud}`;
+    T(ctx, "Palabra que envía:", X(25.5), Y(37.6), { tam: 11.5 * g, alin: "center", color: GRIS });
+    T(ctx, `etiqueta ${etq}₈`, X(25.5), Y(34.4), { tam: 15.5 * g, negrita: true, alin: "center", color: AMB2 });
+    T(ctx, nombre, X(25.5), Y(31.6), { tam: 11.5 * g, alin: "center", color: TXT });
+    T(ctx, vtxt, X(25.5), Y(28.8), { tam: 14 * g, negrita: true, alin: "center", color: TXT });
+    T(ctx, m.fallo ? "SSM 00: aviso de fallo" : "SSM 11: normal", X(25.5), Y(26.0), { tam: 11 * g, negrita: true, alin: "center", color: m.fallo ? ER_E : OK_E });
+    T(ctx, st.bit < 32 ? `bit ${Math.min(st.bit + 1, 32)} de 32` : "gap (fin de palabra)", X(25.5), Y(23.6), { tam: 11 * g, alin: "center", color: GRIS });
+    T(ctx, "TX", X(33.8), Y(33.6), { tam: 11, negrita: true, color: NAVY });
+    // bus: par trenzado
+    const pa = [], pb = [];
+    for (let i = 0; i <= 500; i++) { const x = 33.5 + 64.5 * i / 500; pa.push([X(x), Y(32 + 0.9 * Math.sin(x * 2.2))]); pb.push([X(x), Y(32 - 0.9 * Math.sin(x * 2.2))]); }
+    Sim.polilinea(ctx, pa, { color: LA, ancho: 1.8 }); Sim.polilinea(ctx, pb, { color: LB, ancho: 1.8 });
+    Sim.caja(ctx, X(34.5), Y(34.6), X(63), Y(29.4) - Y(34.6), { color: "#9AA3AE", ancho: 1.2, guion: [6, 4], radio: 14 });
+    ctx.font = `bold ${12 * g}px ${Sim.FUENTE}`;
+    const largo = "bus ARINC 429: par trenzado y apantallado · un solo sentido (ADC → receptores) · hasta 20 receptores";
+    const cap = ctx.measureText(largo).width <= X(63) ? largo : "bus ARINC 429 · un solo sentido (ADC → receptores) · hasta 20 receptores";
+    T(ctx, cap, X(66), Y(36.5), { tam: 12 * g, negrita: true, alin: "center", color: NAVY });
+    // flechas que avanzan por el bus
+    const fase = (st.bit % 4) * 1.6;
+    for (let xx = 36 + fase; xx < 96; xx += 6.4) triangulo(ctx, [[X(xx), Y(33.3)], [X(xx), Y(30.7)], [X(xx + 1.4), Y(32)]], AMB, AMB2);
+    // receptores: conexión, nombre y estado
+    RECEPTORES.forEach(([nom, etqs, xc], j) => {
+      Sim.polilinea(ctx, [[X(xc - 0.5), Y(31.2)], [X(xc - 0.5), Y(24.3)]], { color: LA, ancho: 1.4 });
+      Sim.polilinea(ctx, [[X(xc + 0.5), Y(31.2)], [X(xc + 0.5), Y(24.3)]], { color: LB, ancho: 1.4 });
+      T(ctx, nom, X(xc), Y(22.5), { tam: 13 * g, negrita: true, alin: "center", color: NAVY });
+      T(ctx, "usa " + [...etqs].sort().join(", "), X(xc), Y(20.1), { tam: 11.5 * g, negrita: true, alin: "center", color: AMB2 });
+      const [txt, tipo] = st.rx[nom];
+      const ult = j === RECEPTORES.length - 1;
+      T(ctx, txt, ult ? X(xc - 1.3) : X(xc + 1.3), Y(28.6), { tam: 11 * g, negrita: true, alin: ult ? "right" : "left", color: COL[tipo] });
+    });
+    if (st.responder) {
+      Sim.flecha(ctx, X(40), Y(21.5), X(33.7), Y(23.5), { color: ER_E, ancho: 2.4, guion: [7, 5], punta: 12 });
+      T(ctx, "✕", X(37), Y(21.3), { tam: 26, negrita: true, alin: "center", base: "middle", color: ER_E });
+    }
+  };
+  function esquemaVertical(ctx, w, h) {
+    const m = st.muestra;
+    // sensores
+    Sim.caja(ctx, 8, 8, w - 16, 60, { relleno: "#F3F6FA", color: GRIS, ancho: 1.4 });
+    T(ctx, "SENSORES", 20, 32, { tam: 15, negrita: true, color: NAVY });
+    T(ctx, "sondas pitot y estática", 20, 54, { tam: 12, color: GRIS });
+    T(ctx, `${miles(st.alt)} ft\n${roundPy(st.cas)} kt`, w - 20, 32, { tam: 14, negrita: true, alin: "right", color: TXT });
+    Sim.flecha(ctx, 40, 70, 40, 92, { color: GRIS, ancho: 1.6, punta: 8 });
+    T(ctx, "presiones", 50, 86, { tam: 11.5, color: GRIS });
+    // ADC
+    const ya = 94, ha = 128;
+    Sim.caja(ctx, 8, ya, w - 16, ha, { relleno: "#E6F1FB", color: NAVY, ancho: 1.8 });
+    T(ctx, "ADC", 20, ya + 26, { tam: 17, negrita: true, color: NAVY });
+    T(ctx, "Air Data Computer · única fuente", 64, ya + 25, { tam: 12, color: GRIS });
+    const [etq, clave, nombre, ud] = PALABRAS[st.i];
+    const vtxt = clave === "mach" ? machTxt(m[clave]) : `${miles(m[clave])} ${ud}`;
+    T(ctx, `envía: etiqueta ${etq}₈`, 20, ya + 52, { tam: 14, negrita: true, color: AMB2 });
+    T(ctx, `${nombre}: ${vtxt}`, 20, ya + 74, { tam: 13, negrita: true, color: TXT });
+    T(ctx, m.fallo ? "SSM 00: aviso de fallo" : "SSM 11: normal", 20, ya + 96, { tam: 12, negrita: true, color: m.fallo ? ER_E : OK_E });
+    T(ctx, st.bit < 32 ? `bit ${Math.min(st.bit + 1, 32)} de 32` : "gap (fin de palabra)", 20, ya + 116, { tam: 12, color: GRIS });
+    // bus vertical
+    const xp = 30, y0 = ya + ha, y1 = h - 26;
+    const pa = [], pb = [];
+    for (let i = 0; i <= 300; i++) { const y = y0 + (y1 - y0) * i / 300; const s = 4 * Math.sin(y * 0.16); pa.push([xp + s, y]); pb.push([xp - s, y]); }
+    Sim.polilinea(ctx, pa, { color: LA, ancho: 1.8 }); Sim.polilinea(ctx, pb, { color: LB, ancho: 1.8 });
+    const fase = (st.bit % 4) * 10;
+    for (let yy = y0 + 8 + fase; yy < y1 - 12; yy += 40) triangulo(ctx, [[xp - 6, yy], [xp + 6, yy], [xp, yy + 9]], AMB, AMB2);
+    const x1 = 58, alto = 74, sep = 10;
+    RECEPTORES.forEach(([nom, etqs], j) => {
+      const yb = y0 + 14 + j * (alto + sep), yc = yb + alto / 2;
+      Sim.polilinea(ctx, [[xp, yc - 4], [x1, yc - 4]], { color: LA, ancho: 1.5 });
+      Sim.polilinea(ctx, [[xp, yc + 4], [x1, yc + 4]], { color: LB, ancho: 1.5 });
+      const [txt, tipo] = st.rx[nom];
+      Sim.caja(ctx, x1, yb, w - x1 - 8, alto, { relleno: "#FFFFFF", color: tipo === "gris" ? "#C9CED6" : COL[tipo], ancho: 1.6 });
+      T(ctx, nom, x1 + 10, yb + 21, { tam: 14, negrita: true, color: NAVY });
+      T(ctx, "usa " + [...etqs].sort().join(", "), w - 18, yb + 21, { tam: 12, negrita: true, alin: "right", color: AMB2 });
+      T(ctx, txt.replace("\n", " "), x1 + 10, yb + 48, { tam: 13, negrita: true, color: COL[tipo] });
+    });
+    T(ctx, "un solo sentido: del ADC a los receptores", x1, h - 8, { tam: 11.5, color: GRIS });
+    if (st.responder) {
+      Sim.flecha(ctx, w - 40, y0 + 14, w - 40, y0 - 6, { color: ER_E, ancho: 2.4, guion: [6, 4], punta: 11 });
+      T(ctx, "✕", w - 62, y0 + 4, { tam: 24, negrita: true, alin: "center", base: "middle", color: ER_E });
+    }
+  }
+
+  // ── Pantallas de los receptores (coordenadas del Python: cada pantalla 19 × 20 unidades, y hacia arriba)
+  const ANCHOS = { "PFD": 19, "FMC / MCDU": 19, "Transpondedor": 18 };
+  const TITULOS = { "PFD": "PFD", "FMC / MCDU": "FMC → MCDU", "Transpondedor": "Transpondedor" };
+  const CAB = 24, SEPU = 1.5;
+  const enFila = (w) => w >= 560;
+  const escalaPant = (w) => (enFila(w) ? w / (19 + 19 + 18 + 2 * SEPU) : Math.min(w, 250) / 19);
+  const lienzoPan = lienzoAdaptable("#pantallas", { etiqueta: "Pantallas de la PFD, la MCDU y el transpondedor" },
+    (w) => { const s = escalaPant(w); return enFila(w) ? CAB + 20 * s + 4 : 3 * (CAB + 20 * s) + 2 * 14 + 4; });
+  lienzoPan.o.dibujar = (ctx, w) => {
+    const s = escalaPant(w);
+    let ox = 0, oy = 0;
+    for (const nom of ["PFD", "FMC / MCDU", "Transpondedor"]) {
+      const anchoU = ANCHOS[nom];
+      if (!enFila(w)) ox = (w - anchoU * s) / 2;
+      T(ctx, TITULOS[nom], ox + anchoU * s / 2, oy + 16, { tam: 13.5, negrita: true, alin: "center", color: NAVY });
+      const P = {   // pasa de unidades del Python (x a la derecha, y hacia arriba) a píxeles
+        x: (x) => ox + x * s, y: (y) => oy + CAB + (20 - y) * s, s,
+        f: (pt) => Math.max(8, pt / 10.48 * s * 1.08),
+        r: (x, y, ww, hh, relleno, borde, ancho) => rect(ctx, ox + x * s, oy + CAB + (20 - y - hh) * s, ww * s, hh * s, relleno, borde, ancho),
+        t: (txt, x, y, e) => T(ctx, txt, ox + x * s, oy + CAB + (20 - y) * s, Object.assign({ base: "middle" }, e)),
+      };
+      if (nom === "PFD") pfd(ctx, P); else if (nom === "FMC / MCDU") mcdu(ctx, P); else xpdr(ctx, P);
+      const [n, tipo] = st.flash[nom];
+      if (n > 0) rect(ctx, ox - 2, oy + CAB - 2, anchoU * s + 4, 20 * s + 4, null, COL[tipo], 3.2);
+      if (enFila(w)) ox += (anchoU + SEPU) * s; else oy += CAB + 20 * s + 14;
+    }
+  };
+  function pfd(ctx, P) {
+    const v = st.pant["PFD"];
+    P.r(0, 0, 19, 20, "#101418", "#333");
+    // actitud (fija, para reconocer la pantalla)
+    P.r(4.6, 10, 9.8, 7.5, "#2F7FC1"); P.r(4.6, 2.5, 9.8, 7.5, "#8A5A2B");
+    Sim.polilinea(ctx, [[P.x(4.6), P.y(10)], [P.x(14.4), P.y(10)]], { color: "#FFFFFF", ancho: 1.2 });
+    Sim.polilinea(ctx, [[P.x(7.3), P.y(10)], [P.x(8.8), P.y(10)], [P.x(9.5), P.y(9.2)], [P.x(10.2), P.y(10)], [P.x(11.7), P.y(10)]], { color: "#FFD400", ancho: 2.4 });
+    // cintas de velocidad y de altitud
+    for (const [clave, xa, ventana, pasoLab, pasoTick, txt] of [["cas", 0.4, 40, 20, 10, "CAS kt"], ["alt", 14.7, 500, 200, 100, "ALT ft"]]) {
+      const ancho = 4.0, yc = 10, alto = 15;
+      P.r(xa, yc - alto / 2, ancho, alto, "#3A3F45");
+      P.t(txt, xa + ancho / 2, yc + alto / 2 + 1.0, { tam: P.f(6.5), alin: "center", color: "#FFFFFF" });
+      const val = v[clave];
+      if (v.fallo.has(clave)) {
+        P.r(xa, yc - alto / 2, ancho, alto, "#3A0D0D", ER_E, 1.5);
+        P.t(clave === "cas" ? "SPD" : "ALT", xa + ancho / 2, yc, { tam: P.f(10), negrita: true, alin: "center", color: "#FF4D4D" });
+        continue;
+      }
+      if (val === null) continue;
+      const esc = alto / (2 * ventana);
+      const base = Math.floor(val / pasoTick) * pasoTick;
+      for (let mm = base - ventana; mm <= base + ventana; mm += pasoTick) {
+        const y = yc + (mm - val) * esc;
+        if (y > yc - alto / 2 + 0.4 && y < yc + alto / 2 - 0.4) {
+          const xs = clave === "cas" ? [xa + ancho - 0.8, xa + ancho] : [xa, xa + 0.8];
+          Sim.polilinea(ctx, [[P.x(xs[0]), P.y(y)], [P.x(xs[1]), P.y(y)]], { color: "#FFFFFF", ancho: 0.8 });
+          if (((mm % pasoLab) + pasoLab) % pasoLab === 0 && Math.abs(y - yc) > 1.4)
+            P.t(String(mm).replace("-", "−"), clave === "cas" ? xa + ancho / 2 - 0.4 : xa + ancho / 2 + 0.6, y, { tam: P.f(5.5), alin: "center", color: "#FFFFFF" });
+        }
+      }
+      P.r(xa - 0.2, yc - 1.2, ancho + 0.4, 2.4, "#000000", "#FFD400", 1.4);
+      P.t(String(roundPy(val)), xa + ancho / 2, yc, { tam: P.f(8.5), negrita: true, alin: "center", color: "#FFFFFF" });
+    }
+    // Mach
+    if (v.fallo.has("mach")) P.t("MACH", 2.4, 1.3, { tam: P.f(6.5), negrita: true, alin: "center", color: "#FF4D4D" });
+    else if (v.mach !== null) P.t(machTxt(v.mach), 2.4, 1.3, { tam: P.f(8), negrita: true, alin: "center", color: VERDE });
+  }
+  function mcdu(ctx, P) {
+    const v = st.pant["FMC / MCDU"];
+    const w = 19;
+    P.r(0, 0, w, 20, "#C9CDD2", "#555");
+    P.r(1.2, 7, w - 2.4, 12, "#0B0F12", "#333", 1);
+    const mono = (pt, extra) => Object.assign({ tam: P.f(pt) }, extra);
+    ctx.save();
+    P.t("PROGRESO", w / 2, 17.4, mono(8, { alin: "center", color: "#FFFFFF" }));
+    const filas = [["ALTITUD", "alt", (x) => miles(x)], ["CAS (kt)", "cas", (x) => String(roundPy(x))], ["MACH", "mach", machTxt]];
+    filas.forEach(([et, clave, f], k) => {
+      const y = 14.6 - k * 2.6;
+      P.t(et, 2.0, y, mono(7, { color: "#FFFFFF" }));
+      let txt, col;
+      if (v.fallo.has(clave)) { txt = "----"; col = AMB; }
+      else if (v[clave] === null) { txt = ""; col = VERDE; }
+      else { txt = f(v[clave]); col = VERDE; }
+      P.t(txt, w - 2.0, y, mono(8, { alin: "right", negrita: true, color: col }));
+    });
+    ctx.restore();
+    for (let r = 0; r < 2; r++) for (let c = 0; c < 7; c++) P.r(1.3 + c * 2.4, 1.0 + r * 2.7, 1.9, 2.1, "#8E959C");   // teclado (decorativo)
+  }
+  function xpdr(ctx, P) {
+    const v = st.pant["Transpondedor"];
+    const w = 18;
+    P.r(0, 0, w, 20, "#2B2F33", "#555");
+    P.r(1.5, 11, w - 3, 6.5, "#061006", "#444", 1);
+    let txt, col;
+    if (v.fallo.has("alt")) { txt = "ALT ----"; col = AMB; }
+    else if (v.alt === null) { txt = ""; col = VERDE; }
+    else { txt = "FL" + String(roundPy(v.alt / 100)).padStart(3, "0"); col = VERDE; }
+    P.t(txt, w / 2, 14.2, { tam: P.f(12), negrita: true, alin: "center", color: col });
+    const lh = P.f(7.5) * 1.25;
+    T(ctx, "envía la altitud\nal radar del ATC", P.x(w / 2), P.y(8.2) - lh / 2, { tam: P.f(7.5), alin: "center", base: "middle", color: "#C8CCD0" });
+    P.t("(nivel de vuelo = ft ÷ 100)", w / 2, 3.2, { tam: P.f(6.5), alin: "center", color: "#9AA0A6" });
+  }
+
+  // ── Señal en el cable (A − B), bit a bit
+  const lienzoSen = lienzoAdaptable("#senal", { etiqueta: "Señal bipolar RZ de la palabra en el cable" }, () => 168);
+  lienzoSen.o.dibujar = (ctx, w) => {
+    const b = palabraActual(st);
+    const izq = w < 520 ? 60 : 70, der = 6;
+    const bw = (w - izq - der) / 36;
+    const X = (k) => izq + k * bw;
+    const kAct = st.bit;
+    ctx.fillStyle = "#EEF0F3"; ctx.fillRect(X(32), 4, GAP * bw, 120);
+    const y0 = 52, amp = 36;
+    for (const [yy, t] of [[y0 - amp, "HI +10 V"], [y0, "NULL"], [y0 + amp, "LO −10 V"]]) {
+      ctx.strokeStyle = "#E3E7EC"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(izq, yy); ctx.lineTo(w - der, yy); ctx.stroke();
+      T(ctx, t, izq - 5, yy, { tam: w < 520 ? 10 : 11, alin: "right", base: "middle", color: GRIS });
+    }
+    const pts = [[X(0), y0]];
+    for (let k = 0; k < Math.min(kAct + 1, 32); k++) {
+      const yy = y0 - (b[k + 1] ? 1 : -1) * amp;
+      pts.push([X(k), y0], [X(k), yy], [X(k + 0.5), yy], [X(k + 0.5), y0], [X(k < kAct ? k + 1 : k + 0.5), y0]);
+    }
+    if (kAct >= 32) pts.push([X(kAct + 1), y0]);
+    Sim.polilinea(ctx, pts, { color: NAVY, ancho: 1.8 });
+    const yC = 100, hC = 18;
+    for (let k = 0; k < 32; k++) {
+      const bit = k + 1;
+      const c = bit === st.ruido ? ER_F : CAMPO[campo(bit)];
+      ctx.fillStyle = k <= kAct ? c : "#FFFFFF"; ctx.fillRect(X(k), yC, bw, hC);
+      ctx.strokeStyle = "#D9E0E8"; ctx.lineWidth = 0.6; ctx.strokeRect(X(k), yC, bw, hC);
+      if (k <= kAct && bw >= 8) {
+        ctx.font = `bold ${Math.min(12, bw * 0.9)}px ${MONO}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillStyle = bit === st.ruido ? ER_E : TXT; ctx.fillText(String(b[bit]), X(k + 0.5), yC + hC / 2 + 1);
+      }
+    }
+    T(ctx, "gap", X(34), yC + hC / 2, { tam: 11, alin: "center", base: "middle", color: GRIS });
+    const marcas = bw < 13 ? [1, 8, 11, 20, 29, 32] : [1, 8, 9, 10, 11, 20, 29, 30, 31, 32];
+    for (const bit of marcas) T(ctx, String(bit), X(bit - 0.5), yC + hC + 11, { tam: 10, alin: "center", base: "middle", color: GRIS });
+    for (const [txt, corto, a, z] of [["ETIQUETA (1-8)", "ETQ", 0, 8], ["SDI", "SDI", 8, 10], ["DATOS + signo (11-29)", "DATOS", 10, 29], ["SSM", "SSM", 29, 31], ["P", "P", 31, 32]]) {
+      ctx.font = `bold 11px ${Sim.FUENTE}`;
+      const disp = (z - a) * bw - 3;
+      const t = ctx.measureText(txt).width <= disp ? txt : ctx.measureText(corto).width <= disp ? corto : "";
+      if (t) T(ctx, t, X((a + z) / 2), yC + hC + 30, { tam: 11, negrita: true, alin: "center", base: "middle", color: NAVY });
+    }
+    const xc = Math.min(kAct, 35) + (kAct < 32 ? 0.5 : 1);
+    Sim.polilinea(ctx, [[X(xc), 4], [X(xc), 124]], { color: AMB, ancho: 2 });
+  };
+
+  // ── Panel de información
+  const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  function pintarInfo() {
+    const m = st.muestra;
+    const [etq, clave, nombre, ud] = PALABRAS[st.i];
+    const vtxt = clave === "mach" ? machTxt(m[clave]) : `${miles(m[clave])} ${ud}`;
+    const k = st.bit;
+    const rx = RECEPTORES.map(([nom]) => {
+      const [txt, tipo] = st.rx[nom];
+      return `<p><span class="fuerte">${esc(nom)}:</span> <span class="${tipo === "ok" ? "verde" : tipo === "mal" ? "rojo" : "gris"}">${esc(txt.replace("\n", " ") || "esperando la primera palabra")}</span></p>`;
+    }).join("");
+    Sim.html("#info",
+      `<p class="etq">Etiqueta ${etq}₈</p><p>${esc(nombre)}: ${esc(vtxt)}</p>
+      <p class="${m.fallo ? "rojo" : "verde"}">${m.fallo ? "SSM 00: aviso de fallo" : "SSM 11: operación normal"}</p>
+      <p class="gris">BNR · el ADC toma la medida al empezar cada palabra</p>
+      <p class="fuerte sep">${k < 32 ? `Enviando el bit ${k + 1} de 32 (${campo(k + 1).toLowerCase()})` : `Gap: ${GAP} bits en NULL (fin de palabra)`}</p>
+      ${st.ruido !== null ? `<p class="rojo sep">¡Ruido! El bit ${st.ruido} llega cambiado: la paridad no cuadrará.</p>` : ""}
+      <p class="fuerte sep">Última palabra recibida:</p>${rx}
+      <p class="gris sep">Palabras enviadas: ${st.cuenta}</p>`);
+    document.getElementById("tit-senal").textContent =
+      `La palabra ${etq}₈ en el cable (A − B): 1 → HI, 0 → LO, vuelta a NULL · a 100 kbit/s: 10 µs por bit, 320 µs la palabra`;
+    const k2 = st.bit;
+    const activo = k2 < 2 ? [0, 1] : k2 < 32 ? [2] : [3];
+    document.querySelectorAll("#pasos li").forEach((li, j) => li.classList.toggle("on", activo.includes(j)));
+  }
+  function actualizar() {
+    pintarInfo();
+    document.getElementById("aviso-resp").hidden = !st.responder;
+    lienzoEsq.pedir(); lienzoPan.pedir(); lienzoSen.pedir();
+  }
+
+  // ── Mandos y animación (un paso cada 90 ms, como el temporizador del Python)
+  const fmtMiles = (u) => (v) => `${miles(v)} ${u}`;
+  Sim.deslizador("#sensores", { etiqueta: "Altitud", min: 0, max: 41000, valor: 35000, paso: 100, formato: fmtMiles("ft"), alCambiar: (v) => { st.alt = v; actualizar(); } });
+  Sim.deslizador("#sensores", { etiqueta: "Velocidad (CAS)", min: 100, max: 350, valor: 280, paso: 1, formato: fmtMiles("kt"), alCambiar: (v) => { st.cas = v; actualizar(); } });
+  const mandos = document.getElementById("mandos");
+  const bPausa = Sim.boton(mandos, "Pausa", () => pausa(), { primario: true });
+  Sim.boton(mandos, "Siguiente bit", () => { if (!st.pausa) pausa(); paso(1); });
+  const bRitmo = Sim.boton(mandos, "Ritmo: bit a bit", () => { st.rapido = !st.rapido; bRitmo.textContent = st.rapido ? "Ritmo: rápido" : "Ritmo: bit a bit"; });
+  const bRuido = Sim.boton(mandos, "Ruido en la próxima palabra", () => { st.ruidoProx = true; bRuido.textContent = "Ruido preparado…"; });
+  const bFallo = Sim.boton(mandos, "Fallo del ADC", () => { st.fallo = !st.fallo; bFallo.textContent = st.fallo ? "Reparar el ADC" : "Fallo del ADC"; });
+  const bResp = Sim.boton(mandos, "¿Puede la PFD pedir datos al ADC?", () => {
+    st.responder = !st.responder; bResp.textContent = st.responder ? "Ocultar" : "¿Puede la PFD pedir datos al ADC?"; actualizar();
+  });
+  bRuido.classList.add("ruido"); bFallo.classList.add("fallo"); bResp.classList.add("ancho");
+
+  function paso(n) {
+    const antes = st.cuenta, iAntes = st.i;
+    avanzar(st, n);
+    if (st.i !== iAntes && !st.ruidoProx) bRuido.textContent = "Ruido en la próxima palabra";
+    actualizar();
+    return antes;
+  }
+  let acc = 0;
+  const anim = Sim.animar((dt) => {
+    acc += dt;
+    let n = 0;
+    while (acc >= 0.09 && n < 3) { acc -= 0.09; n++; paso(st.rapido ? 4 : 1); }
+  });
+  function pausa() {
+    st.pausa = !st.pausa;
+    bPausa.textContent = st.pausa ? "Continuar" : "Pausa";
+    if (st.pausa) anim.parar(); else { acc = 0; anim.arrancar(); }
+  }
+  actualizar();
+  anim.arrancar();
+  /*PRUEBA*/{ const q = new URLSearchParams(location.search); if (q.get('n')) { if (q.get('r')) st.ruidoProx = true; if (q.get('fallo')) bFallo.click(); if (q.get('resp')) bResp.click(); for (let k = 0; k < +q.get('n'); k++) paso(1); pausa(); } }/*FIN*/
+})();
+</script>
+</body>
+</html>

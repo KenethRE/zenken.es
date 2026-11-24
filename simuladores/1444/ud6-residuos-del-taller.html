@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Lleva cada residuo del taller a su contenedor y llena el bidón de disolvente sin pasar del 80 %.">
+<title>Fin de jornada: cada residuo a su contenedor · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .salida { white-space: pre-wrap; }
+  .residuo { background: var(--navy); color: var(--white); border-radius: var(--radius); padding: 16px 20px 18px; }
+  .residuo .cuenta { white-space: pre-wrap; margin: 0 0 6px; color: var(--gold); font-weight: 700; font-size: .95rem; letter-spacing: .02em; }
+  .residuo .nombre { margin: 0; font-family: var(--serif); font-size: clamp(1.4rem, 3.2vw, 2rem); line-height: 1.2; }
+  .residuo .desc { margin: 6px 0 0; color: #CFE0F5; font-style: italic; font-size: 1.05rem; }
+  .contenedores { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  @media (max-width: 640px) { .contenedores { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .contenedores button {
+    font: inherit; font-weight: 700; font-size: 1rem; line-height: 1.2; color: var(--white); cursor: pointer;
+    border: 2px solid transparent; border-radius: 10px; min-height: 64px; padding: 8px 10px;
+  }
+  .contenedores button.claro { color: var(--ink); }
+  .contenedores button:hover { background: var(--gold) !important; color: var(--ink); }
+  .contenedores button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+  .respuesta { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: stretch; }
+  .respuesta .btn { min-width: 9em; }
+  @media (max-width: 480px) { .respuesta { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Fin de jornada: cada residuo a su contenedor</h1>
+    <p class="sub">UD6 · CE d · e · apartado 7 de los apuntes</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div class="residuo" aria-live="polite">
+        <p class="cuenta" id="cuenta"></p>
+        <p class="nombre" id="nombre"></p>
+        <p class="desc" id="desc"></p>
+      </div>
+      <div class="contenedores" id="contenedores"></div>
+      <div class="respuesta">
+        <div class="panel"><div class="salida" id="salida" aria-live="polite"></div></div>
+        <button type="button" class="btn primario" id="siguiente">Siguiente residuo ▶</button>
+      </div>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta">
+        <h2>Bidón de disolvente usado</h2>
+        <div id="bidon"></div>
+        <div class="controles" id="mandos"></div>
+        <p class="salida" id="estadoBidon"></p>
+      </div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Aparece un residuo del taller de aviónica y del hangar y se pulsa el contenedor donde debe ir. El panel explica si es correcto y por qué, y lleva la cuenta de aciertos.</p>
+      <p>A la derecha, el bidón de disolvente usado: se llena con el deslizador y avisa en rojo al pasar del 80 % (los apuntes, apartado 7: los bidones con líquido se llenan como máximo al 80 %).</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Preguntas para el alumnado</h2>
+      <ul>
+        <li>¿Por qué un trapo con disolvente es residuo peligroso aunque esté seco?</li>
+        <li>¿Dónde van las pilas del polímetro?</li>
+        <li>¿Por qué el electrolito de la batería de Ni-Cd (alcalino) no se guarda junto al ácido de una batería de plomo?</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Relación con los apuntes</h2>
+      <p>UD6, apartado 7, almacenamiento de residuos peligrosos: zona de residuos peligrosos separada de los no peligrosos, de las materias primas, de los productos y del material de limpieza; áreas diferenciadas para los residuos incompatibles (una fuga los podría mezclar); recipientes adecuados, etiquetados y paletizados; inventario de entradas y salidas. CE d (orden y limpieza) y CE e (normativa de protección ambiental).</p>
+      <p class="nota-ref">Dato de referencia, NO está en los apuntes: la clasificación de cada residuo en su contenedor sigue la práctica habitual de los puntos limpios y la Ley 7/2022, de residuos y suelos contaminados (residuos peligrosos, RAEE, pilas y acumuladores…). Cada empresa la concreta en su procedimiento de gestión de residuos.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  /* CÁLCULO */
+  const CONT = ["Papel y cartón", "Plásticos y envases limpios", "Metales sin contaminar", "Pilas y baterías",
+    "Aparatos eléctricos (RAEE)", "Lámparas y fluorescentes", "Líquidos peligrosos", "Sólidos contaminados"];
+  const COL_CONT = ["#2F6DB5", "#F2C200", "#7F8C8D", "#C0392B", "#8E44AD", "#16A085", "#A0522D", "#E67E22"];
+
+  // [residuo, descripción, contenedor correcto, explicación]
+  const RESIDUOS = [
+    ["Recortes de cable de cobre", "Sobrantes limpios de cortar un mazo", 2, "Metal sin contaminar: se recicla como chatarra."],
+    ["Trapos con disolvente", "Limpieza de conectores con disolvente", 7, "Residuo peligroso aunque se seque el disolvente."],
+    ["Batería de Ni-Cd agotada", "Batería de 24 V retirada del avión", 3, "Batería: residuo peligroso, con su electrolito."],
+    ["Pilas del polímetro", "Dos pilas alcalinas de 1,5 V gastadas", 3, "Pilas usadas: contenedor de pilas, nunca a la basura."],
+    ["Spray de limpiacontactos vacío", "Aerosol con restos de producto", 7, "Envase contaminado y aerosol: residuo peligroso."],
+    ["Tubo fluorescente roto", "Luz de cabina desmontada (con guantes)", 5, "Lámparas: contienen sustancias peligrosas."],
+    ["Tarjeta electrónica averiada", "Módulo de control no reparable", 4, "Aparato eléctrico y electrónico: RAEE."],
+    ["Disolvente usado", "Restos líquidos de la limpieza", 6, "Líquido peligroso: bidón cerrado y lleno hasta el 80 %."],
+    ["Caja de cartón", "Embalaje de un lote de conectores", 0, "Papel y cartón limpio: se recicla."],
+    ["Escoria de estaño con plomo", "Restos de la estación de soldadura", 7, "Contiene plomo: sólido peligroso."],
+    ["Recortes de funda termorretráctil", "Sobrantes limpios de plástico", 1, "Plástico limpio, sin contaminar."],
+    ["Aceite hidráulico usado", "Purga de un circuito hidráulico", 6, "Aceite usado: líquido peligroso."],
+    ["Absorbente de un derrame", "Recogida de electrolito derramado", 7, "Absorbente contaminado: sólido peligroso."],
+  ];
+
+  // Juego: estado y respuesta al pulsar un contenedor
+  function nuevoJuego() { return { i: -1, aciertos: 0, intentos: 0, resuelto: false }; }
+  function elegir(e, k) {
+    if (e.resuelto) return null;
+    const [, , ok, expl] = RESIDUOS[e.i];
+    e.intentos += 1;
+    if (k === ok) {
+      e.aciertos += 1; e.resuelto = true;
+      return { texto: `✔ Correcto: ${CONT[ok]}.\n${expl}`, color: C.GREEN };
+    }
+    return { texto: `✖ «${CONT[k]}» no es su sitio.\nPiensa: ¿es peligroso? ¿es un aparato? Prueba otra vez.`, color: C.RED };
+  }
+  function siguiente(e) {
+    e.i = (e.i + 1) % RESIDUOS.length; e.resuelto = false;
+    return { texto: "¿En qué contenedor va? Pulsa uno.", color: C.INK };
+  }
+  function bidon(v) {
+    return v > 80 ? { texto: `${num(v, 0, "%")}: ¡demasiado lleno!\nNo pases del 80 %`, color: C.RED }
+      : { texto: `${num(v, 0, "%")}: correcto\n(máximo 80 %)`, color: C.GREEN };
+  }
+  /* FIN CÁLCULO */
+
+  const juego = nuevoJuego();
+  const $ = (id) => document.getElementById(id);
+  const salida = $("salida");
+  function mensaje(m) { salida.textContent = m.texto; salida.style.color = m.color; }
+  function mostrar() {
+    const [nombre, desc] = RESIDUOS[juego.i];
+    $("cuenta").textContent = `RESIDUO ${juego.i + 1} DE ${RESIDUOS.length}   ·   aciertos: ${juego.aciertos} de ${juego.intentos}`;
+    $("nombre").textContent = nombre;
+    $("desc").textContent = desc;
+  }
+
+  CONT.forEach((c, k) => {
+    const b = Sim.el("button", { type: "button", text: c });
+    b.style.background = COL_CONT[k];
+    if (k === 1) b.classList.add("claro");
+    b.addEventListener("click", () => { const m = elegir(juego, k); if (m) { mensaje(m); mostrar(); } });
+    $("contenedores").append(b);
+  });
+  $("siguiente").addEventListener("click", () => { mensaje(siguiente(juego)); mostrar(); });
+
+  // Bidón
+  let llenado = 50;
+  const lienzo = new Sim.Lienzo("#bidon", {
+    ancho: 300, proporcion: 1.05, altoMax: 380, etiqueta: "Bidón de disolvente con la marca del 80 %",
+    dibujar(ctx, w, h) {
+      const X = (x) => x * w, Y = (y) => h - 10 - y * (h - 30);
+      const alto = Y(0) - Y(1);
+      const lleno = llenado > 80;
+      ctx.save(); ctx.globalAlpha = lleno ? 1 : 0.75; ctx.fillStyle = lleno ? C.RED : "#A0522D";
+      ctx.fillRect(X(0.2), Y(llenado / 100), X(0.6), alto * llenado / 100); ctx.restore();
+      ctx.save(); ctx.strokeStyle = C.NAVY; ctx.lineWidth = 3; ctx.strokeRect(X(0.2), Y(1), X(0.6), alto); ctx.restore();
+      Sim.polilinea(ctx, [[X(0.12), Y(0.8)], [X(0.88), Y(0.8)]], { color: C.RED, ancho: 2.5, guion: true });
+      Sim.texto(ctx, "80 %", X(1) - 4, Y(0.8) - 6, { tam: 18, negrita: true, color: C.RED, alin: "right" });
+    },
+  });
+  Sim.deslizador("#mandos", { etiqueta: "Llenado", min: 0, max: 100, valor: 50, paso: 5, unidad: "%", dec: 0, alCambiar: (v) => {
+    llenado = v; const m = bidon(v); $("estadoBidon").textContent = m.texto; $("estadoBidon").style.color = m.color; lienzo.pedir();
+  } });
+  { const m = bidon(llenado); $("estadoBidon").textContent = m.texto; $("estadoBidon").style.color = m.color; $("estadoBidon").style.fontWeight = 700; }
+
+  mensaje(siguiente(juego));
+  mostrar();
+})();
+</script>
+</body>
+</html>

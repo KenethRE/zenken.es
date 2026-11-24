@@ -34,7 +34,7 @@ jobs:
         run: |
           mkdir -p dist
           cp index.html favicon.ico favicon.svg apple-touch-icon.png dist/
-          cp -r python dist/
+          cp -r python simuladores dist/
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

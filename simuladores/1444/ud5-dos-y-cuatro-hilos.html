@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Cambia la resistencia de los cables y de las pinzas, y compara la medida a dos hilos con la de cuatro (Kelvin).">
+<title>Dos hilos frente a cuatro hilos (Kelvin) · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .fila.dos-uno { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+  @media (max-width: 700px) { .fila.dos-uno { grid-template-columns: minmax(0, 1fr); } }
+  .salida { white-space: pre-wrap; }
+  .veredicto { font-weight: 700; margin-top: 10px; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Dos hilos frente a cuatro hilos (Kelvin)</h1>
+    <p class="sub">UD5 · CE a · CE c · CE d · unión de masa de miliohmios</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div class="fila dos-uno">
+        <div id="esquema"></div>
+        <div id="barras"></div>
+      </div>
+      <p class="nota-ref">A dos hilos, resta siempre los cables (ajuste de cero). Para miliohmios, mide a cuatro hilos.</p>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Mandos</h2><div class="controles" id="mandos"></div></div>
+      <div class="panel"><h2>Resultado</h2><div class="salida" id="salida"></div><div class="salida veredicto" id="veredicto"></div></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Compara lo que lee un óhmetro a dos hilos (con o sin ajuste de cero) y un micro-ohmímetro de cuatro hilos al medir una resistencia muy pequeña, como una unión de masa (<i>bonding</i>) o un conductor de protección. Mueve la resistencia real, la de cada cable de prueba y la de contacto de cada pinza.</p>
+      <p>A dos hilos la lectura incluye los cables y los contactos; el ajuste de cero (puntas unidas) quita los cables, pero no los contactos ni la falta de resolución. A cuatro hilos, los hilos de tensión no llevan corriente y la lectura es la de la resistencia.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Preguntas para el alumnado</h2>
+      <ul>
+        <li>¿Por qué una unión de 2 mΩ puede parecer de 0,13 Ω?</li>
+        <li>¿Sirve un polímetro con resolución de 0,01 Ω para comprobar un límite de miliohmios?</li>
+      </ul>
+      <p class="nota-ref">Los valores de resolución (0,01 Ω en el óhmetro de taller y 10 µΩ en el micro-ohmímetro) y del límite son de referencia: no están en los apuntes.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  /* CÁLCULO */
+  const ORANGE = "#D9822B";
+  const METODOS = ["2 hilos", "2 hilos con ajuste de cero", "4 hilos (Kelvin)"];
+  const RES_2H = 0.01;      // Ω, resolución del óhmetro de taller (valor de referencia)
+  const RES_4H = 0.00001;   // Ω, resolución del micro-ohmímetro (10 µΩ, valor de referencia)
+
+  // round() de Python: redondeo al par en los empates
+  function pyRound(x) { const r = Math.round(x); return (Math.abs(x % 1) === 0.5 && r % 2 !== 0) ? r - 1 : r; }
+
+  // Resistencia con la unidad más cómoda (Ω o mΩ)
+  function fmtR(r) {
+    if (r < 1) return num(r * 1000, r < 0.1 ? 2 : 1, "mΩ");
+    return num(r, 3, "Ω");
+  }
+
+  // Lectura del instrumento (Ω) según el método. rc: cada cable de prueba; rk: contacto de cada pinza.
+  function lectura(m, rx, rc, rk) {
+    let bruto, res;
+    if (m === 0) { bruto = rx + 2 * rc + 2 * rk; res = RES_2H; }
+    else if (m === 1) { bruto = rx + 2 * rk; res = RES_2H; }   // el ajuste de cero resta los dos cables, no los contactos
+    else { bruto = rx; res = RES_4H; }                           // los hilos de tensión no miden cables ni contactos
+    return [pyRound(bruto / res) * res, res];
+  }
+
+  function resultado(m, rx, rc, rk, lim) {
+    const [lect, res] = lectura(m, rx, rc, rk);
+    let ea = lect - rx;
+    if (Math.abs(ea) < res / 2) ea = 0;
+    const cumpleLect = lect <= lim, cumpleReal = rx <= lim;
+    const resTxt = res >= 0.001 ? fmtR(res) : num(res * 1e6, 0, "µΩ");
+    const pantalla = m < 2 ? num(lect, 2, "Ω") : num(lect * 1000, 2, "mΩ");
+    const sg = ea >= 0 ? "+" : "−";
+    const texto = `Método: ${METODOS[m]}\nR real: ${fmtR(rx)}\nLectura en pantalla: ${pantalla}\nResolución: ${resTxt}\n`
+      + `Error: ${sg}${fmtR(Math.abs(ea))}` + (rx > 0 ? `  (${sg}${num(Math.abs(ea) / rx * 100, 0, "%")})` : "")
+      + `\nLímite del manual: ${fmtR(lim)}\n\nCon esta lectura se concluye:\n   ${cumpleLect ? "CUMPLE" : "NO CUMPLE"}`;
+    let aviso, color;
+    if (res > lim) { aviso = "NO CONCLUYENTE:\nla resolución es mayor\nque el límite"; color = ORANGE; }
+    else if (cumpleLect === cumpleReal) { aviso = "Conclusión correcta"; color = C.GREEN; }
+    else { aviso = "Conclusión ERRÓNEA:\nel valor real " + (cumpleReal ? "sí cumple" : "no cumple"); color = C.RED; }
+    return { lect, res, ea, texto, aviso, color, parteC: m === 0 ? 2 * rc : 0, parteK: m < 2 ? 2 * rk : 0 };
+  }
+  /* FIN CÁLCULO */
+
+  const st = { m: 0, rx: 0.002, rc: 0.06, rk: 4, lim: 0.003 };
+  let r = null;
+
+  // ── Esquema (coordenadas 0–1 como el Python, en un lienzo lógico de 600 de ancho)
+  const esquema = new Sim.Lienzo("#esquema", {
+    ancho: 600, proporcion: 0.56, etiqueta: "Esquema de la medida de la unión de masa",
+    dibujar(ctx, w, h) {
+      const X = (x) => x * w, Y = (y) => (1 - y) * h;
+      const T = (s, x, y, e) => Sim.texto(ctx, s, X(x), Y(y), Object.assign({ tam: 17, alin: "center" }, e));
+      const resistencia = (x, y, ww, etq, color) => {
+        Sim.caja(ctx, X(x - ww / 2), Y(y + 0.025), X(ww), Y(0) - Y(0.05), { relleno: C.WHITE, color, ancho: 2, radio: 1 });
+        T(etq, x, y + 0.045, { color, tam: 16 });
+      };
+      const linea = (xs, ys, color) => Sim.polilinea(ctx, xs.map((x, i) => [X(x), Y(ys[i])]), { color, ancho: 2.6 });
+      const m = st.m;
+      Sim.caja(ctx, X(0.01), Y(0.79), X(0.24), Y(0) - Y(0.58), { relleno: C.NAVY, color: C.NAVY, radio: 12 });
+      T(m < 2 ? "Óhmetro" : "Micro-\nohmímetro", 0.13, m < 2 ? 0.64 : 0.69, { color: C.WHITE, tam: 19, negrita: true });
+      // pieza: la unión de masa
+      Sim.caja(ctx, X(0.84), Y(0.75), X(0.07), Y(0) - Y(0.50), { relleno: "#C9D3E3", color: C.NAVY, ancho: 2, radio: 0 });
+      ctx.save(); ctx.translate(X(0.875), Y(0.5)); ctx.rotate(-Math.PI / 2);
+      Sim.texto(ctx, "Rx", 0, 0, { tam: 20, negrita: true, alin: "center", base: "middle" }); ctx.restore();
+      T("unión de masa", 0.875, 0.04, { color: C.MUTED, tam: 16 });
+      if (m < 2) {
+        for (const [y, sig] of [[0.70, "+"], [0.30, "−"]]) {
+          linea([0.24, 0.84], [y, y], C.NAVY);
+          resistencia(0.42, y, 0.10, "cable", C.NAVY);
+          resistencia(0.74, y, 0.06, "contacto", ORANGE);
+          T(sig, 0.265, y + 0.03, { color: C.NAVY, tam: 20, alin: "left" });
+        }
+        Sim.flecha(ctx, X(0.52), Y(0.745), X(0.58), Y(0.745), { color: C.RED, ancho: 2.5 });
+        T("I", 0.55, 0.785, { color: C.RED, tam: 20, negrita: true });
+        T("mide V e I\npor los\nmismos hilos", 0.13, 0.46, { color: C.GOLD, tam: 16 });
+        if (m === 1) T("cables restados\ncon el ajuste de cero", 0.42, 0.53, { color: C.GREEN, tam: 17, fondo: C.WHITE, pad: 6 });
+        if (m === 1) Sim.caja(ctx, X(0.42) - 92, Y(0.53) - 22, 184, 50, { color: C.GREEN, radio: 8, ancho: 1.5 });
+      } else {
+        for (const y of [0.80, 0.20]) {   // hilos de corriente, por fuera
+          linea([0.24, 0.84, 0.84], [y, y, y > 0.5 ? 0.75 : 0.25], C.NAVY);
+          resistencia(0.42, y, 0.10, "cable I", C.NAVY);
+          resistencia(0.74, y, 0.06, "contacto", ORANGE);
+        }
+        for (const [y, yp] of [[0.62, 0.66], [0.38, 0.34]]) {   // hilos de tensión, por dentro
+          linea([0.24, 0.80, 0.80, 0.84], [y, y, yp, yp], C.GOLD);
+          resistencia(0.42, y, 0.10, "cable V (I ≈ 0)", "#9A6A00");
+        }
+        Sim.flecha(ctx, X(0.54), Y(0.845), X(0.60), Y(0.845), { color: C.RED, ancho: 2.5 });
+        T("I", 0.57, 0.875, { color: C.RED, tam: 20, negrita: true });
+        T("I por fuera\nV por dentro", 0.13, 0.43, { color: C.GOLD, tam: 17 });
+      }
+    },
+  });
+
+  // ── Barras: de qué está hecha la lectura
+  const barras = new Sim.Lienzo("#barras", {
+    proporcion: 1.1, altoMax: 400, altoMin: 300, etiqueta: "Barras con el valor real y la lectura descompuesta",
+    dibujar(ctx, w, h, L) {
+      if (!r) return;
+      const f = 1000;
+      const top = Math.max(st.rx + r.parteK + r.parteC, st.lim) * f * 1.75;
+      const ej = new Sim.Ejes(L, ctx, {
+        xlim: [-0.55, 1.75], ylim: [0, top], xticks: [0, 1], fmtx: (v) => (v === 0 ? "real" : "lectura"),
+        ylabel: "Resistencia (mΩ)", titulo: "De qué está hecha la lectura", margen: { izq: 64, der: 8 }, tam: 13,
+      });
+      ej.marco();
+      ej.barras([0], [st.rx * f], 0.6, { color: C.GREEN });
+      ej.barras([1], [st.rx * f], 0.6, { color: C.GREEN });
+      ej.barras([1], [(st.rx + r.parteK) * f], 0.6, { color: ORANGE, base: st.rx * f });
+      ej.barras([1], [(st.rx + r.parteK + r.parteC) * f], 0.6, { color: "#9AA7BD", base: (st.rx + r.parteK) * f });
+      ej.hline(st.lim * f, { color: C.RED, guion: true, ancho: 1.8 });
+      ej.texto(1.36, st.lim * f, "límite", { color: C.RED, tam: 13, base: "bottom", fondo: "rgba(255,255,255,0.85)", pad: 2 });
+      ej.leyenda([{ texto: "Rx", color: C.GREEN, ancho: 10 }, { texto: "contactos", color: ORANGE, ancho: 10 }, { texto: "cables", color: "#9AA7BD", ancho: 10 }], "arriba-izq");
+    },
+  });
+
+  const salida = document.getElementById("salida");
+  const veredicto = document.getElementById("veredicto");
+  function actualizar() {
+    r = resultado(st.m, st.rx, st.rc, st.rk / 1000, st.lim);
+    salida.textContent = r.texto;
+    veredicto.textContent = r.aviso;
+    veredicto.style.color = r.color;
+    esquema.pedir(); barras.pedir();
+  }
+
+  Sim.opciones("#mandos", { titulo: "Método", etiquetas: METODOS, activa: 0, alCambiar: (i) => { st.m = i; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "R real", min: Math.log10(0.0005), max: Math.log10(10), valor: Math.log10(0.002), paso: "any",
+    formato: (e) => fmtR(10 ** e), alCambiar: (e) => { st.rx = 10 ** e; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "Cada cable", min: 0.01, max: 0.30, valor: 0.06, paso: 0.01, unidad: "Ω", dec: 2, alCambiar: (v) => { st.rc = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "Contacto pinza", min: 0, max: 30, valor: 4, paso: 0.5, unidad: "mΩ", dec: 1, alCambiar: (v) => { st.rk = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "Límite manual", min: Math.log10(0.001), max: Math.log10(10), valor: Math.log10(0.003), paso: "any",
+    formato: (e) => fmtR(10 ** e), alCambiar: (e) => { st.lim = 10 ** e; actualizar(); } });
+  actualizar();
+})();
+</script>
+</body>
+</html>
