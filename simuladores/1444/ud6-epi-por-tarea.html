@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Elige una tarea del hangar o del taller, marca los EPI que llevarías y comprueba qué falta y qué sobra.">
+<title>Elige los EPI de cada tarea · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .salida { white-space: pre-wrap; }
+  .riesgos { font-size: 1.05rem; margin: 0; }
+  #comprobacion { margin-top: 4px; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Elige los EPI de cada tarea</h1>
+    <p class="sub">UD6 · CE b · c · apartado 4 de los apuntes</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div class="tarjeta"><h2>Tarea</h2><div class="controles" id="tareas"></div></div>
+      <div class="tarjeta"><h2>EPI que llevarías</h2><div class="controles" id="epis"></div></div>
+    </div>
+    <aside class="lateral">
+      <div class="panel">
+        <h2>Riesgos de la tarea</h2><p class="riesgos" id="riesgos"></p>
+      </div>
+      <div class="panel">
+        <h2>Comprobación</h2><div class="salida" id="comprobacion"></div>
+      </div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Se elige una tarea y se marcan los EPI que llevarías. El panel dice al momento qué está bien, qué falta y qué EPI NO es adecuado para esa tarea (en rojo, con el motivo). El botón «Ver solución» marca los EPI necesarios.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Preguntas para el alumnado</h2>
+      <ul>
+        <li>¿Por qué los zapatos conductores son buenos en el puesto ESD y malos al trabajar con tensión?</li>
+        <li>¿Qué gafas usarías en cada tarea?</li>
+        <li>¿Sirven los guantes de cuero para trasvasar ácido?</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Los EPI de los apuntes</h2>
+      <p>UD6, apartado 4, y protectores auditivos del apartado 2.1.2:</p>
+      <ul>
+        <li>Gafas de acetato: circuitos eléctricos y ambientes inflamables y explosivos. Gafas irrompibles: partículas grandes. Gafas contra sustancias químicas: salpicaduras. Gafas herméticas: humo y polvo fino. Protector de la cara: pequeñas partículas.</li>
+        <li>Tapones y cascos: por encima de 85 dB (mejor los dos a la vez).</li>
+        <li>Guantes de electricista (caucho): descargas y quemaduras. Guantes de caucho: ácidos, álcalis y sustancias químicas. Guantes de soldador (cuero): calor y salpicaduras al soldar; NO sirven para productos químicos.</li>
+        <li>Zapatos conductores: derivan a masa la estática de la persona. Zapatos para instalaciones eléctricas: protegen del contacto con cables (aíslan). Zapatos que no producen chispas: atmósferas explosivas o inflamables. Puntera: golpes.</li>
+        <li>Máscara con sustancias químicas: vapores al pintar con productos atomizados. Máscara de filtro metálico: polvos; NO sirve contra humos de metal caliente ni vapores. Delantal: ácidos.</li>
+      </ul>
+      <p class="nota-ref">La pulsera antiestática no figura entre los EPI de los apuntes: sale de las normas ESD que citan (ESD S1.1, pulseras).</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C } = Sim;
+
+  /* CÁLCULO */
+  const EPI = ["Gafas de acetato", "Gafas irrompibles", "Gafas c. sust. químicas", "Gafas herméticas", "Protector de la cara",
+    "Tapones", "Cascos (orejeras)", "Guantes de electricista", "Guantes de caucho",
+    "Guantes de soldador", "Zapatos con puntera", "Zapatos conductores", "Zapatos instal. eléctricas", "Zapatos antichispas",
+    "Máscara sust. químicas", "Máscara filtro metálico", "Delantal contra ácidos", "Pulsera antiestática"];
+
+  // Cada tarea: riesgos, EPI necesarios, EPI que se admiten (no hacen falta, pero no estorban) y EPI no adecuados con su motivo
+  const TAREAS = {
+    "Prueba de motores": {
+      riesgos: "Ruido > 85 dB (más de 120 dB junto a los\nreactores), aspiración y chorro del motor.",
+      req: ["Tapones", "Cascos (orejeras)"], ok: ["Zapatos con puntera"], mal: {} },
+    "Batería Ni-Cd: electrolito": {
+      riesgos: "El electrolito salta a piel y ojos; con el\naluminio da hidrógeno (explosivo).",
+      req: ["Gafas c. sust. químicas", "Guantes de caucho"], ok: ["Delantal contra ácidos", "Protector de la cara", "Zapatos con puntera"],
+      mal: { "Guantes de soldador": "el cuero no protege de álcalis" } },
+    "Cuadro con tensión 115 V": {
+      riesgos: "Contacto eléctrico directo en una prueba\nfuncional con el avión energizado.",
+      req: ["Guantes de electricista", "Gafas de acetato", "Zapatos instal. eléctricas"], ok: [],
+      mal: { "Zapatos conductores": "derivan a masa: dejan pasar la corriente",
+        "Pulsera antiestática": "te une a masa mientras tocas tensión" } },
+    "Amoladora: desbastar": {
+      riesgos: "Fragmentos grandes que saltan en cualquier\ndirección y partículas contra la cara.",
+      req: ["Gafas irrompibles", "Protector de la cara"], ok: ["Tapones", "Cascos (orejeras)", "Zapatos con puntera", "Guantes de soldador"],
+      mal: {} },
+    "Pintar con pistola": {
+      riesgos: "Vapores del producto atomizado y\nsalpicaduras.",
+      req: ["Máscara sust. químicas", "Gafas c. sust. químicas"], ok: ["Guantes de caucho", "Delantal contra ácidos"],
+      mal: { "Máscara filtro metálico": "es para polvos, no para vapores" } },
+    "Tarjeta sensible a ESD": {
+      riesgos: "La estática del cuerpo daña la tarjeta\nsin que se note la descarga.",
+      req: ["Zapatos conductores", "Pulsera antiestática"], ok: ["Gafas de acetato"],
+      mal: { "Zapatos instal. eléctricas": "aíslan: la carga no se descarga",
+        "Guantes de caucho": "aíslan y se cargan por fricción",
+        "Guantes de electricista": "aíslan y se cargan por fricción" } },
+    "Cerca de combustible": {
+      riesgos: "Vapores inflamables: cualquier chispa o\narco puede provocar un incendio.",
+      req: ["Zapatos antichispas", "Gafas de acetato"], ok: ["Guantes de caucho"], mal: {} },
+    "Trasvasar ácido": {
+      riesgos: "Salpicaduras de ácido de la batería de\nplomo del grupo de tierra.",
+      req: ["Gafas c. sust. químicas", "Guantes de caucho", "Delantal contra ácidos"], ok: ["Protector de la cara", "Zapatos con puntera"],
+      mal: { "Guantes de soldador": "el cuero no protege de los ácidos" } },
+  };
+
+  // [correctos, faltan, no_adecuados [[epi, motivo]], sobran]
+  function evaluar(tarea, marcados) {
+    const d = TAREAS[tarea];
+    const ok = d.req.filter((e) => marcados.includes(e));
+    const faltan = d.req.filter((e) => !marcados.includes(e));
+    const mal = marcados.filter((e) => e in d.mal).map((e) => [e, d.mal[e]]);
+    const sobran = marcados.filter((e) => !d.req.includes(e) && !(e in d.mal) && !d.ok.includes(e));
+    return [ok, faltan, mal, sobran];
+  }
+
+  function comprobacion(tarea, marcados) {
+    const [ok, faltan, mal, sobran] = evaluar(tarea, marcados);
+    let lineas = ok.map((e) => `✔ ${e}`);
+    lineas = lineas.concat(faltan.map((e) => `✖ Falta: ${e}`));
+    lineas = lineas.concat(mal.map(([e, m]) => `✖ ${e}:\n    ${m}`));
+    lineas = lineas.concat(sobran.map((e) => `· ${e}: no hace falta aquí`));
+    if (!faltan.length && !mal.length) lineas = lineas.concat(["", "¡Correcto! Equipo completo."]);
+    const color = (mal.length || faltan.length) ? C.RED : (ok.length ? C.GREEN : C.INK);
+    return { texto: lineas.join("\n"), color };
+  }
+  /* FIN CÁLCULO */
+
+  const NOMBRES = Object.keys(TAREAS);
+  let tarea = NOMBRES[0];
+  const riesgos = document.getElementById("riesgos");
+  const comp = document.getElementById("comprobacion");
+
+  const marcados = () => EPI.filter((_, i) => cas.estado(i));
+  function actualizar() {
+    riesgos.textContent = TAREAS[tarea].riesgos.replace("\n", " ");
+    const r = comprobacion(tarea, marcados());
+    comp.textContent = r.texto;
+    comp.style.color = r.color;
+  }
+  function poner(lista) { EPI.forEach((e, i) => cas.fijar(i, lista.includes(e))); actualizar(); }
+
+  Sim.opciones("#tareas", { etiquetas: NOMBRES, activa: 0, alCambiar: (i) => { tarea = NOMBRES[i]; actualizar(); } });
+  const cas = Sim.casillas("#epis", { etiquetas: EPI, marcadas: [], alCambiar: actualizar });
+  Sim.boton("#epis", "Ver solución", () => poner(TAREAS[tarea].req), { primario: true });
+  Sim.boton("#epis", "Borrar", () => poner([]));
+  poner(["Tapones"]);   // ejemplo inicial: falta un EPI
+})();
+</script>
+</body>
+</html>

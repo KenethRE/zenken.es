@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Toca cada panel del techo de la cabina del A320 y mira qué equipos se montan en cada zona.">
+<title>Overhead del A320: dónde va cada cosa · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  #overhead .lienzo { width: 100%; max-width: 640px; justify-self: center; }
+  #overhead canvas { cursor: pointer; }
+  .aviso-sit { font-weight: 700; margin: 0; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Overhead del A320: dónde va cada cosa</h1>
+    <p class="sub">UD4 · CE b · f · esquema simplificado (no a escala)</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena" id="overhead"></div>
+    <aside class="lateral">
+      <div class="panel"><h2>Toca o haz clic en un panel</h2><div class="salida" id="salida"></div></div>
+      <div class="tarjeta"><h2>Situación</h2><div class="controles" id="mandos"></div></div>
+      <div class="panel"><p class="aviso-sit" id="aviso"></p></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Esquema simplificado del overhead del A320 según los apuntes (no a escala): sección delantera (FWD) con los paneles de sistemas de arriba abajo y las luces en la parte inferior, y sección trasera (AFT) con el panel de circuit breakers.</p>
+      <p>Haz clic en un panel para ver qué hay y qué se monta en él (carátulas luminosas, breakers). Elige una situación: vuelo normal («lights out»), prueba de lámparas, fallo de una bomba de combustible o un disyuntor saltado.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Preguntas para el alumnado</h2>
+      <ul>
+        <li>En vuelo normal, ¿por qué no hay ningún pulsador iluminado?</li>
+        <li>En la prueba de lámparas, ¿qué indica el pulsador que no se enciende?</li>
+        <li>¿Dónde montarías los pulsadores de las bombas de combustible? ¿Y un breaker?</li>
+      </ul>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C } = Sim;
+
+  /* calc:inicio */
+  // paneles de la sección central delantera, de arriba abajo (orden de los apuntes)
+  const CENTRALES = ["ANTIINCENDIOS", "HIDRÁULICO", "COMBUSTIBLE", "ELÉCTRICO", "AIRE ACONDICIONADO", "ANTIHIELO", "PRESURIZACIÓN"];
+  const INFO = {
+    "ANTIINCENDIOS": "Mandos del sistema antiincendios.\nArriba del todo en la sección central.",
+    "HIDRÁULICO": "Pulsadores de las bombas y sistemas hidráulicos.",
+    "COMBUSTIBLE": "Pulsadores luminosos de las bombas de los tanques de combustible.",
+    "ELÉCTRICO": "Generadores, baterías y barras del sistema eléctrico.",
+    "AIRE ACONDICIONADO": "Mandos del aire acondicionado.",
+    "ANTIHIELO": "Mandos del antihielo.",
+    "PRESURIZACIÓN": "Mandos de la presurización de cabina.",
+    "LUCES": "Parte inferior y más adelantada: los controles de uso más frecuente, luces exteriores e interiores.",
+    "CIRCUIT BREAKERS": "Sección trasera (AFT) del overhead: panel de circuit breakers (disyuntores).",
+    "OTROS": "Otros paneles laterales del overhead (el esquema no los detalla).",
+  };
+  const SITUACIONES = ["Vuelo normal (lights out)", "Prueba de lámparas", "Fallo bomba combustible", "Disyuntor saltado"];
+  const MSGS = [
+    ["Vuelo normal: ningún pulsador iluminado («lights out»).", "navy"],
+    ["Prueba de lámparas: uno NO se enciende (HIDRÁULICO): bombilla fundida.", "rojo"],
+    ["FAULT ámbar en una bomba de combustible: algo anormal.", "ambar"],
+    ["Breaker saltado en el panel AFT (blanco). Busca la causa antes de rearmar.", "rojo"],
+  ];
+  // zonas en las coordenadas del Python (x de 0 a 10, y de 0 a 16,2): nombre → [x, y, w, h]
+  const ZONAS = { "CIRCUIT BREAKERS": [1.5, 12.3, 7.0, 3.5], "OTROS": [0.3, 1.9, 2.4, 9.6], "OTROS_D": [7.3, 1.9, 2.4, 9.6] };
+  const HC = 9.6 / CENTRALES.length;
+  CENTRALES.forEach((n, i) => { ZONAS[n] = [2.8, 11.5 - (i + 1) * HC, 4.4, HC - 0.06]; });
+  ZONAS["LUCES"] = [0.3, 0.3, 9.4, 1.5];
+
+  function zonaEn(x, y) {
+    for (const [n, [zx, zy, w, h]] of Object.entries(ZONAS)) if (zx <= x && x <= zx + w && zy <= y && y <= zy + h) return n;
+    return null;
+  }
+  // pulsador k (0–2) del panel n: [encendido, rótulo]
+  function luz(sit, n, k) {
+    if (sit === 1) return [!(n === "HIDRÁULICO" && k === 1), "FAULT"]; // prueba de lámparas: todo encendido salvo una lámpara fundida
+    if (sit === 2 && n === "COMBUSTIBLE" && k === 0) return [true, "FAULT"];
+    return [false, ""];
+  }
+  function informe(sel, sit) {
+    const nombre = sel === "OTROS_D" ? "OTROS" : sel;
+    let monta = "";
+    if (nombre === "CIRCUIT BREAKERS") monta = "Qué se monta: breakers (disyuntores) de oprimir y resetear, de oprimir y tirar o de palanca, según la orden de producción.";
+    else if (nombre !== "OTROS") monta = "Qué se monta: pulsadores e indicadores luminosos (carátulas): cabezal, bombillas y cuerpo.";
+    return { salida: `► ${nombre}\n\n${INFO[nombre]}` + (monta ? `\n\n${monta}` : ""), aviso: MSGS[sit][0], color: MSGS[sit][1] };
+  }
+  /* calc:fin */
+
+  const AMBAR = "#F5A623", PANEL_GRIS = "#8C9AAE", OSCURO = "#2B2F36";
+  const st = { sel: "COMBUSTIBLE", sit: 0 };
+
+  // Lienzo lógico de 500 × 525: 50 unidades por x y 525/16,2 por y
+  const KX = 50, H = 525, KY = H / 16.2;
+  const X = (x) => x * KX, Y = (y) => H - y * KY;
+  const rect = (ctx, x, y, w, h, e) => Sim.caja(ctx, X(x), Y(y + h), w * KX, h * KY, Object.assign({ radio: 0 }, e));
+  const T = (ctx, s, x, y, e) => Sim.texto(ctx, s, X(x), Y(y), e);
+
+  const lienzo = new Sim.Lienzo("#overhead", {
+    ancho: 500, proporcion: H / 500, etiqueta: "Esquema del panel superior del A320; toca un panel para ver qué hay",
+    dibujar(ctx) {
+      const { sel, sit } = st;
+      const resaltado = (n) => n === sel || ((sel === "OTROS" || sel === "OTROS_D") && (n === "OTROS" || n === "OTROS_D"));
+      const FONDO = { "CIRCUIT BREAKERS": "#C9D3E0", OTROS: PANEL_GRIS, OTROS_D: PANEL_GRIS };
+      // primero los fondos, después los bordes (el resaltado dorado queda encima)
+      for (const [n, [x, y, w, h]] of Object.entries(ZONAS)) rect(ctx, x, y, w, h, { relleno: FONDO[n] || "#DCE3EC", color: null });
+      // breakers del panel AFT
+      for (let f = 0; f < 5; f++) for (let c = 0; c < 14; c++) {
+        const j = f * 14 + c, saltado = sit === 3 && j === 23;
+        Sim.circulo(ctx, X(1.95 + c * 0.47), Y(12.6 + f * 0.55), 6.5, { relleno: saltado ? C.WHITE : C.INK, color: saltado ? C.RED : C.INK, ancho: saltado ? 3 : 1 });
+      }
+      T(ctx, "AFT · CIRCUIT BREAKERS", 1.65, 15.68, { tam: 15, negrita: true, base: "top", color: C.INK });
+      for (const x of [1.5, 8.5]) T(ctx, "otros\npaneles", x, 6.85, { tam: 16, negrita: true, alin: "center", base: "middle", color: C.WHITE });
+      // paneles centrales con tres pulsadores cada uno
+      CENTRALES.forEach((n, i) => {
+        const y = ZONAS[n][1];
+        T(ctx, n, 2.95, y + HC - 0.06 - 0.1, { tam: 13.5, negrita: true, base: "top", color: C.INK });
+        for (let k = 0; k < 3; k++) {
+          const [on, rot] = luz(sit, n, k);
+          rect(ctx, 3.3 + k * 1.25, y + 0.18, 0.9, 0.55, { relleno: on ? "#3A3420" : OSCURO, color: C.MUTED, ancho: 1 });
+          if (on) T(ctx, rot, 3.75 + k * 1.25, y + 0.455, { tam: 12, negrita: true, alin: "center", base: "middle", color: AMBAR });
+        }
+      });
+      T(ctx, "LUCES EXTERIORES E INTERIORES", 0.45, 1.68, { tam: 13.5, negrita: true, base: "top", color: C.INK });
+      for (let k = 0; k < 8; k++) rect(ctx, 0.7 + k * 1.15, 0.45, 0.5, 0.6, { relleno: OSCURO, color: C.MUTED, ancho: 1 });
+      T(ctx, "FWD (sección delantera)", 5.0, 11.65, { tam: 14, alin: "center", color: C.MUTED });
+      for (const [n, [x, y, w, h]] of Object.entries(ZONAS)) {
+        const r = resaltado(n);
+        rect(ctx, x, y, w, h, { color: r ? C.GOLD : C.NAVY, ancho: r ? 4 : 1.5 });
+      }
+    },
+  });
+  lienzo.puntero({ abajo: (x, y) => { const n = zonaEn(x / KX, (H - y) / KY); if (n) { st.sel = n; actualizar(); } } });
+
+  const salida = document.getElementById("salida"), aviso = document.getElementById("aviso");
+  const COLOR = { navy: C.NAVY, rojo: C.RED, ambar: "#B7791F" };
+  function actualizar() {
+    const inf = informe(st.sel, st.sit);
+    salida.textContent = inf.salida;
+    aviso.textContent = inf.aviso;
+    aviso.style.color = COLOR[inf.color];
+    lienzo.pedir();
+  }
+  Sim.opciones("#mandos", { etiquetas: SITUACIONES, activa: 0, alCambiar: (i) => { st.sit = i; actualizar(); } });
+  actualizar();
+})();
+</script>
+</body>
+</html>

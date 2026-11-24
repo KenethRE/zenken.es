@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Cambia la tensión de contacto, la duración, la piel, el apoyo y el trayecto, y mira la zona de efectos de la corriente.">
+<title>Corriente por el cuerpo humano · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .salida { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Corriente por el cuerpo humano</h1>
+    <p class="sub">UD6 · CE a · b · zonas de la IEC 60479-1 (referencia)</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div id="grafica"></div>
+      <div class="panel"><h2>Resultado (ley de Ohm: I = V / R)</h2><div class="salida" id="salida"></div></div>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Mandos</h2><div class="controles" id="mandos"></div></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Un técnico toca una pieza con tensión (por ejemplo, la carcasa de un taladro de 230 V con el cable pelado). La simulación calcula la corriente que atraviesa el cuerpo con la ley de Ohm, I = V / R, y la coloca en el gráfico intensidad–tiempo para ver en qué zona de efectos cae.</p>
+      <p>Así se ve lo que dicen los apuntes (UD6, apartado 3 y fig. 3): lo peligroso es la INTENSIDAD; la piel húmeda y el buen contacto con tierra dejan pasar más corriente; y la duración del contacto y el recorrido entre la entrada y la salida agravan el accidente.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Preguntas para el alumnado</h2>
+      <ul>
+        <li>Con 230 V y la piel seca, ¿qué cambia al poner calzado aislante? ¿Y si el suelo está mojado?</li>
+        <li>¿Por qué la mano izquierda–pies es más peligrosa que mano–mano?</li>
+        <li>¿Qué pasa si el contacto dura 2 s en vez de 0,1 s?</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Modelo y datos de referencia</h2>
+      <p><b>Modelo orientativo, para clase: NO sirve para calcular la seguridad de una instalación real.</b></p>
+      <ul>
+        <li>Resistencia del cuerpo mano–mano o mano–pies con piel seca, según la tensión (valores medios de la IEC 60479-1: unos 3 250 Ω a 25 V, 1 725 Ω a 100 V, 1 225 Ω a 225 V y 950 Ω a 400 V). Piel húmeda: × 0,75. Piel mojada: × 0,5.</li>
+        <li>Resistencia del apoyo (solo en los trayectos mano–pies): calzado aislante en suelo seco, 100 kΩ; calzado normal en suelo seco, 3 kΩ; descalzo, pies mojados o pisando chapa, 0 Ω.</li>
+        <li>Factor de corriente de corazón F (IEC 60479-1): mano izquierda–pies 1,0; mano derecha–pies 0,8; mano–mano 0,4. La corriente equivalente I·F es la que se compara con las curvas.</li>
+        <li>Zonas de efectos de la corriente alterna de 15 a 100 Hz (IEC 60479-1), curvas aproximadas: AC-1 (por debajo de 0,5 mA), se percibe o no, sin reacción; AC-2 (hasta la curva b, I = 10 + 10/t, con t en s, y como máximo 200 mA), percepción y contracciones involuntarias, normalmente sin efectos peligrosos; AC-3 (hasta la curva c1), contracciones fuertes, ASIMIENTO, dificultad para respirar, efectos normalmente reversibles; AC-4 (por encima de c1), posible FIBRILACIÓN VENTRICULAR, parada cardiaca y respiratoria, quemaduras graves.</li>
+      </ul>
+      <p class="nota-ref">Las zonas, las resistencias y los factores son datos de referencia de la IEC 60479-1: NO están en los apuntes. La CC y la CA de 400 Hz de los aviones son algo menos peligrosas que la de 50 Hz para la misma intensidad (los apuntes: «cuanto menor es la frecuencia, más peligrosa»), pero las precauciones son las mismas.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  /* CÁLCULO */
+  const V_TAB = [25, 50, 75, 100, 125, 150, 175, 200, 225, 400, 500, 700, 1000];
+  const R_TAB = [3250, 2500, 2000, 1725, 1550, 1400, 1325, 1275, 1225, 950, 850, 775, 775];
+  const PIEL = [["Piel seca", 1.0], ["Piel húmeda (sudor)", 0.75], ["Piel mojada", 0.5]];
+  const APOYO = [["Calzado aislante, seco", 100000], ["Calzado normal, seco", 3000], ["Descalzo, chapa, mojado", 0]];
+  const TRAYECTO = [["Mano izquierda – pies (F = 1,0)", 1.0, true], ["Mano derecha – pies (F = 0,8)", 0.8, true], ["Mano – mano (F = 0,4)", 0.4, false]];
+  const C1_T = [10, 100, 1000, 10000], C1_I = [500, 400, 50, 40];
+  const ZONAS = {
+    "AC-1": ["Se percibe o no; sin reacción", C.GREEN],
+    "AC-2": ["Percepción y contracciones involuntarias;\nnormalmente sin efectos peligrosos", "#B8860B"],
+    "AC-3": ["Contracción fuerte: ASIMIENTO, no puede\nsoltarse; le cuesta respirar (reversible)", C.RED],
+    "AC-4": ["Posible FIBRILACIÓN VENTRICULAR,\nparada cardiaca, quemaduras graves", C.RED],
+  };
+
+  // np.interp: interpolación lineal con extremos fijos
+  function interp(x, xs, ys) {
+    if (x <= xs[0]) return ys[0];
+    if (x >= xs[xs.length - 1]) return ys[ys.length - 1];
+    let k = 1; while (x > xs[k]) k++;
+    return ys[k - 1] + (ys[k] - ys[k - 1]) * (x - xs[k - 1]) / (xs[k] - xs[k - 1]);
+  }
+  // Duración en ms a partir de la posición logarítmica del deslizador, redondeada a 2 cifras
+  const tDe = (v) => Number((10 ** v).toPrecision(2));
+  const rCuerpo = (v) => interp(Math.max(v, 25), V_TAB, R_TAB);
+  const curvaB = (tMs) => Math.min(10 + 10 / (tMs / 1000), 200.0);
+  const curvaC1 = (tMs) => 10 ** interp(Math.log10(tMs), C1_T.map(Math.log10), C1_I.map(Math.log10));
+
+  function zona(ieq, tMs) {
+    if (ieq < 0.5) return "AC-1";
+    if (ieq < curvaB(tMs)) return "AC-2";
+    if (ieq < curvaC1(tMs)) return "AC-3";
+    return "AC-4";
+  }
+
+  function calcular(v, iPiel, iApoyo, iTray, tMs) {
+    const [, f, pies] = TRAYECTO[iTray];
+    const rc = rCuerpo(v) * PIEL[iPiel][1];
+    const ra = pies ? APOYO[iApoyo][1] : 0;
+    const i = v > 0 ? 1000 * v / (rc + ra) : 0.0;   // mA
+    const ieq = i * f, z = zona(ieq, tMs);
+    const [efecto, col] = ZONAS[z];
+    const texto = `R cuerpo = ${num(rc, 0, "Ω")}   R apoyo = ${pies ? num(ra, 0, "Ω") : "no influye (mano–mano)"}\n`
+      + `I = ${num(v, 0, "V")} / ${num(rc + ra, 0, "Ω")} = ${num(i, 1, "mA")}\n`
+      + `I · F = ${num(ieq, 1, "mA")} durante ${num(tMs, 0, "ms")}\n`
+      + `Zona ${z}: ${efecto}`;
+    return { rc, ra, i, ieq, z, texto, color: z !== "AC-1" ? col : C.INK };
+  }
+  /* FIN CÁLCULO */
+
+  const st = { v: 230, d: 2.7, piel: 0, apoyo: 1, tray: 0 };
+  let r = null;
+  const T_CURVA = Sim.linspace(1, 4, 300).map((e) => 10 ** e);
+
+  const grafica = new Sim.Lienzo("#grafica", {
+    proporcion: 0.72, altoMin: 320, altoMax: 600, etiqueta: "Zonas de efectos de la corriente en función de la intensidad y la duración",
+    dibujar(ctx, w, h, L) {
+      if (!r) return;
+      const ej = new Sim.Ejes(L, ctx, {
+        xlim: [0.1, 5000], ylim: [10, 10000], logx: true, logy: true,
+        xticks: [0.1, 0.5, 1, 10, 100, 1000], yticks: [10, 100, 1000, 10000],
+        fmtx: (v) => num(v, v < 1 ? 1 : 0), fmty: (v) => num(v, 0),
+        xlabel: "Corriente equivalente I · F (mA)", ylabel: "Duración del contacto (ms)", margen: { izq: 70, arr: 20, der: 22 },
+      });
+      ej.marco();
+      // zonas (relleno entre curvas, recorriendo el eje del tiempo)
+      const zonaX = (x1, x0, color, alfa = 1) => {
+        ej.recortar();
+        ctx.globalAlpha = alfa; ctx.fillStyle = color; ctx.beginPath();
+        T_CURVA.forEach((t, k) => { const p = [ej.px(x1(t)), ej.py(t)]; k ? ctx.lineTo(...p) : ctx.moveTo(...p); });
+        for (let k = T_CURVA.length - 1; k >= 0; k--) ctx.lineTo(ej.px(x0(T_CURVA[k])), ej.py(T_CURVA[k]));
+        ctx.closePath(); ctx.fill(); ej.soltar();
+      };
+      zonaX(() => 0.5, () => 0.1, "#D7EFD9");
+      zonaX(curvaB, () => 0.5, "#FFF3B0");
+      zonaX(curvaC1, curvaB, "#F7B27A");
+      zonaX(() => 5000, curvaC1, "#E8684A", 0.85);
+      ej.linea(T_CURVA.map(curvaB), T_CURVA, { color: C.INK, ancho: 1.5 });
+      ej.linea(T_CURVA.map(curvaC1), T_CURVA, { color: C.INK, ancho: 1.5 });
+      ej.vline(0.5, { color: C.INK, ancho: 1.5 });
+      for (const [x, y, s] of [[0.2, 60, "AC-1"], [2.2, 60, "AC-2"], [150, 150, "AC-3"], [1500, 60, "AC-4"]]) ej.texto(x, y, s, { tam: 16, negrita: true, color: C.NAVY, alin: "center" });
+      ej.texto(10.5, 6000, "b", { tam: 15, negrita: true });
+      ej.texto(43, 6000, "c1", { tam: 15, negrita: true });
+      ej.punto(Math.max(r.ieq, 0.11), tDe(st.d), { radio: 11, color: C.GOLD, borde: C.NAVY });
+    },
+  });
+
+  const salida = document.getElementById("salida");
+  function actualizar() {
+    r = calcular(st.v, st.piel, st.apoyo, st.tray, tDe(st.d));
+    salida.textContent = r.texto;
+    salida.style.color = r.color;
+    grafica.pedir();
+  }
+
+  Sim.deslizador("#mandos", { etiqueta: "Tensión de contacto", min: 0, max: 400, valor: 230, paso: 1, unidad: "V", dec: 0, alCambiar: (v) => { st.v = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "Duración", min: 1, max: 3.7, valor: 2.7, paso: 0.01, formato: (v) => num(tDe(v), 0, "ms"), alCambiar: (v) => { st.d = v; actualizar(); } });
+  Sim.opciones("#mandos", { titulo: "Piel", etiquetas: PIEL.map((p) => p[0]), activa: 0, alCambiar: (i) => { st.piel = i; actualizar(); } });
+  Sim.opciones("#mandos", { titulo: "Apoyo de los pies", etiquetas: APOYO.map((p) => p[0]), activa: 1, alCambiar: (i) => { st.apoyo = i; actualizar(); } });
+  Sim.opciones("#mandos", { titulo: "Trayecto de la corriente", etiquetas: TRAYECTO.map((p) => p[0]), activa: 0, alCambiar: (i) => { st.tray = i; actualizar(); } });
+  actualizar();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Elige un elemento (Z = 1 a 36), mira sus capas y electrones de valencia, y quita o añade electrones para formar un ion.">
+<title>El átomo de Bohr · 1425</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .leyenda-atomo { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; padding: 0 4px; color: var(--muted); font-size: .95rem; list-style: none; }
+  .leyenda-atomo li { display: inline-flex; align-items: center; gap: 6px; }
+  .leyenda-atomo i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid #fff; box-shadow: 0 0 0 1px var(--line); }
+  .ficha-el { margin: 0 0 6px; font-family: var(--serif); font-size: 1.45rem; color: var(--navy); line-height: 1.2; }
+  table.datos td.v { font-weight: 700; color: var(--ink); }
+  .estado-ion { margin: 10px 0 2px; font-weight: 700; }
+  .carga { margin: 0; color: var(--muted); font-size: .95rem; }
+  .clase { margin: 10px 0 0; font-size: 1.35rem; font-weight: 700; letter-spacing: .02em; }
+  .porque { margin: 2px 0 6px; }
+  .regla { margin: 0; color: var(--muted); font-style: italic; font-size: .9rem; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1425 Fundamentos de electricidad</a></p>
+    <h1>El átomo de Bohr</h1>
+    <p class="sub">UD 1 · Teoría de los electrones · núcleo, capas, valencia e iones</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div id="escena"></div>
+      <ul class="leyenda-atomo">
+        <li><i style="background:#E4572E"></i>protón</li>
+        <li><i style="background:#9AA5B1"></i>neutrón</li>
+        <li><i style="background:#00A6D6"></i>electrón</li>
+        <li><i style="background:#F2A33A"></i>electrón de valencia</li>
+      </ul>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Mandos</h2><div class="controles" id="mandos"></div></div>
+      <div class="panel"><h2>Resultado</h2><div id="info"></div></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Elige un elemento (Z = 1 a 36) y mira su núcleo (protones y neutrones), sus capas y sus electrones de valencia (en ámbar). Con el deslizador «Ion» quitas o añades electrones y ves cómo se forma un ion positivo o negativo.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Datos de referencia</h2>
+      <p class="nota-ref">El reparto en capas sigue el orden de llenado de Madelung, con las excepciones del cromo y el cobre (4s¹). El número másico es el del isótopo más abundante. La clasificación conductor/semiconductor/aislante va por tipo de elemento; la regla de la valencia de los apuntes (UD 1, pág. 15) se muestra solo como orientación.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1425 · Fundamentos de electricidad · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+  const DARK = "#0E1B2C", ACC = "#00A6D6", AMB = "#F2A33A", RED = "#E4572E", GREY = "#9AA5B1", MUTED = "#4B5A6E";
+
+  // ── cálculo (puro) ───────────────────────────────────────────────
+  // (símbolo, nombre, número másico del isótopo más abundante, tipo)
+  const ELEMENTOS = [
+    ["H", "Hidrógeno", 1, "no metal"], ["He", "Helio", 4, "gas noble"], ["Li", "Litio", 7, "metal"],
+    ["Be", "Berilio", 9, "metal"], ["B", "Boro", 11, "metaloide"], ["C", "Carbono", 12, "carbono"],
+    ["N", "Nitrógeno", 14, "no metal"], ["O", "Oxígeno", 16, "no metal"], ["F", "Flúor", 19, "no metal"],
+    ["Ne", "Neón", 20, "gas noble"], ["Na", "Sodio", 23, "metal"], ["Mg", "Magnesio", 24, "metal"],
+    ["Al", "Aluminio", 27, "metal"], ["Si", "Silicio", 28, "metaloide"], ["P", "Fósforo", 31, "no metal"],
+    ["S", "Azufre", 32, "no metal"], ["Cl", "Cloro", 35, "no metal"], ["Ar", "Argón", 40, "gas noble"],
+    ["K", "Potasio", 39, "metal"], ["Ca", "Calcio", 40, "metal"], ["Sc", "Escandio", 45, "metal"],
+    ["Ti", "Titanio", 48, "metal"], ["V", "Vanadio", 51, "metal"], ["Cr", "Cromo", 52, "metal"],
+    ["Mn", "Manganeso", 55, "metal"], ["Fe", "Hierro", 56, "metal"], ["Co", "Cobalto", 59, "metal"],
+    ["Ni", "Níquel", 58, "metal"], ["Cu", "Cobre", 63, "metal"], ["Zn", "Cinc", 64, "metal"],
+    ["Ga", "Galio", 69, "metal"], ["Ge", "Germanio", 74, "metaloide"], ["As", "Arsénico", 75, "metaloide"],
+    ["Se", "Selenio", 80, "semiconductor"], ["Br", "Bromo", 79, "no metal"], ["Kr", "Kriptón", 84, "gas noble"],
+  ];
+  // En Python solo había «KLMN»: el bromo con carga −2/−3 y el kriptón con carga negativa abren una 5.ª capa (O).
+  const NOMBRE_CAPA = "KLMNO";
+  const ORBITALES = [[1, 2], [2, 2], [2, 6], [3, 2], [3, 6], [4, 2], [3, 10], [4, 6]]; // (capa, capacidad) en orden de llenado
+
+  function capasNeutro(z) {
+    const cap = [0, 0, 0, 0];
+    let resto = z;
+    for (const [n, c] of ORBITALES) { const k = Math.min(c, resto); cap[n - 1] += k; resto -= k; }
+    if (z === 24 || z === 29) { cap[2] += 1; cap[3] -= 1; } // Cr: 3d5 4s1 · Cu: 3d10 4s1
+    while (cap.length && cap[cap.length - 1] === 0) cap.pop();
+    return cap;
+  }
+  function capasIon(z, carga) {
+    const cap = capasNeutro(z);
+    if (carga > 0) {
+      for (let k = 0; k < Math.min(carga, z); k++) { cap[cap.length - 1] -= 1; if (cap[cap.length - 1] === 0) cap.pop(); }
+    } else if (carga < 0) {
+      for (let k = 0; k < -carga; k++) {
+        const limite = cap.length === 1 ? 2 : 8;
+        if (cap.length && cap[cap.length - 1] < limite) cap[cap.length - 1] += 1; else cap.push(1);
+      }
+    }
+    return cap;
+  }
+  function clasificar(tipo) {
+    return {
+      "metal": ["CONDUCTOR", "metal: sus electrones de valencia se sueltan con facilidad (electrones libres)", ACC],
+      "metaloide": ["SEMICONDUCTOR", "metaloide: conduce poco; se dopa para hacer diodos y transistores", AMB],
+      "semiconductor": ["SEMICONDUCTOR", "el selenio se usó en rectificadores y células fotoeléctricas", AMB],
+      "carbono": ["DEPENDE", "el grafito conduce y el diamante es aislante: misma valencia (4), distinta estructura", AMB],
+      "gas noble": ["AISLANTE", "gas noble: capa externa completa, no cede ni gana electrones", RED],
+      "no metal": ["AISLANTE", "no metal: tiende a ganar electrones, no los suelta", RED],
+    }[tipo];
+  }
+  function reglaApuntes(val) { return val < 4 ? "conductor" : (val === 4 ? "semiconductor" : "aislante"); }
+  const signoCarga = (c) => (c > 0 ? "+" : "−") + Math.abs(c);
+  function atomo(z, cargaPedida) {
+    const carga = Math.min(cargaPedida, z); // no se pueden quitar más electrones de los que hay
+    const [sim, nombre, a, tipo] = ELEMENTOS[z - 1];
+    const cap = capasIon(z, carga);
+    const ne = cap.reduce((s, x) => s + x, 0);
+    const val = cap.length ? cap[cap.length - 1] : 0;
+    const signo = carga === 0 ? "" : (Math.abs(carga) > 1 ? Math.abs(carga) : "") + (carga > 0 ? "+" : "−");
+    const vneu = capasNeutro(z).slice(-1)[0];
+    let estado;
+    if (carga === 0) estado = ["Átomo NEUTRO: protones = electrones", DARK];
+    else if (carga > 0) estado = [`ION POSITIVO (catión): ha perdido ${carga} e⁻`, RED];
+    else estado = [`ION NEGATIVO (anión): ha ganado ${-carga} e⁻`, ACC];
+    const cargaNeta = carga
+      ? `Carga neta: ${signoCarga(carga)} × 1,6·10⁻¹⁹ C = ${carga > 0 ? "+" : "−"}${num(Math.abs(carga) * 1.6, 1)}·10⁻¹⁹ C`
+      : "Carga neta: 0 (tantas cargas + como −)";
+    return {
+      z, carga, sim, nombre, a, tipo, neutrones: a - z, cap, ne, val, signo, vneu, regla: reglaApuntes(vneu),
+      capasTxt: cap.map((c, i) => `${NOMBRE_CAPA[i]} ${c}`).join(" · ") || "ninguna",
+      estado, cargaNeta, clase: clasificar(tipo),
+    };
+  }
+  // ── fin cálculo ──────────────────────────────────────────────────
+
+  // Posiciones en espiral (girasol) para n nucleones
+  function puntosNucleo(n) {
+    const r = [];
+    for (let i = 0; i < n; i++) {
+      const k = i + 0.5, rr = Math.sqrt(k / Math.max(n, 1)), th = k * Math.PI * (3 - Math.sqrt(5));
+      r.push([rr * Math.cos(th), rr * Math.sin(th)]);
+    }
+    return r;
+  }
+  // Barajado reproducible (el mismo elemento siempre se dibuja igual)
+  function barajar(arr, semilla) {
+    let s = semilla * 2654435761 >>> 0;
+    const rnd = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+    return arr;
+  }
+
+  let Z = 13, ION = 0, t = 0, A = atomo(Z, ION), nucleo = [];
+
+  function prepararNucleo() {
+    const nuc = A.z + A.neutrones;
+    const rn = 0.115 * Math.sqrt(nuc) + 0.1;
+    const tipos = barajar(Array.from({ length: nuc }, (_, i) => i < A.z), A.z);
+    const rp = Math.min(0.15, 0.85 * rn / Math.sqrt(nuc) + 0.025);
+    nucleo = { rn, rp, pts: puntosNucleo(nuc).map(([x, y], i) => [x * rn, y * rn, tipos[i]]) };
+  }
+
+  const lienzo = new Sim.Lienzo("#escena", {
+    proporcion: 1, altoMax: 600, etiqueta: "Átomo de Bohr con su núcleo, sus capas y sus electrones",
+    dibujar(ctx, w, h) {
+      const radios = A.cap.map((_, i) => Math.max(1.2, nucleo.rn + 0.5) + 0.78 * i);
+      const lim = Math.max(4.6, (radios.length ? radios[radios.length - 1] : 0) + 0.5);
+      const k = Math.min(w, h) / (2 * lim), cx = w / 2, cy = h / 2;
+      const X = (x) => cx + x * k, Y = (y) => cy - y * k;
+      // capas
+      radios.forEach((radio, i) => {
+        Sim.circulo(ctx, cx, cy, radio * k, { color: "#B8C4CF", ancho: 1.3, guion: [6, 4] });
+        const a = 52 * Math.PI / 180;
+        Sim.texto(ctx, NOMBRE_CAPA[i], X(radio * Math.cos(a)), Y(radio * Math.sin(a) + 0.05), { tam: 14, negrita: true, color: MUTED, alin: "center", base: "bottom" });
+      });
+      // núcleo
+      for (const [x, y, esP] of nucleo.pts) {
+        Sim.circulo(ctx, X(x), Y(y), Math.max(1.5, nucleo.rp * k), { relleno: esP ? RED : GREY, color: "#FFFFFF", ancho: 0.6 });
+      }
+      // electrones
+      const re = Math.max(4.5, 0.11 * k);
+      A.cap.forEach((n, i) => {
+        const ext = i === A.cap.length - 1, wv = 0.9 / (i + 1);
+        for (let j = 0; j < n; j++) {
+          const th = 2 * Math.PI * j / n + wv * t;
+          Sim.circulo(ctx, X(radios[i] * Math.cos(th)), Y(radios[i] * Math.sin(th)), re, { relleno: ext ? AMB : ACC, color: "#FFFFFF", ancho: 1 });
+        }
+      });
+    },
+  });
+
+  const info = document.getElementById("info");
+  let dIon;
+  function actualizar() {
+    A = atomo(Z, ION);
+    prepararNucleo();
+    dIon.caja.querySelector("output").textContent = A.carga ? signoCarga(A.carga) : "0";
+    const [clase, porque, ccol] = A.clase;
+    const filas = [["Número atómico Z", A.z], ["Número másico A", A.a], ["Protones (+)", A.z],
+      ["Neutrones", `${A.neutrones}  (N = A − Z)`], ["Electrones (−)", A.ne], ["Capas", A.capasTxt],
+      ["Electrones de valencia", A.val]];
+    info.innerHTML =
+      `<p class="ficha-el">${A.nombre} (${A.sim}${A.signo ? "<sup>" + A.signo + "</sup>" : ""})</p>` +
+      `<div class="tabla-wrap"><table class="datos"><tbody>${filas.map(([e, v]) => `<tr><td>${e}</td><td class="v">${v}</td></tr>`).join("")}</tbody></table></div>` +
+      `<p class="estado-ion" style="color:${A.estado[1]}">${A.estado[0]}</p>` +
+      `<p class="carga">${A.cargaNeta}</p>` +
+      `<p class="clase" style="color:${ccol}">${clase}</p>` +
+      `<p class="porque">${porque}</p>` +
+      `<p class="regla">Regla de los apuntes (valencia ${A.vneu} → ${A.regla}): solo orientativa</p>`;
+    lienzo.pedir();
+  }
+
+  Sim.deslizador("#mandos", { etiqueta: "Z (protones)", min: 1, max: 36, valor: Z, paso: 1, dec: 0,
+    formato: (v) => `${v} · ${ELEMENTOS[v - 1][0]}`, alCambiar: (v) => { Z = v; actualizar(); } });
+  dIon = Sim.deslizador("#mandos", { etiqueta: "Ion (carga)", min: -3, max: 3, valor: ION, paso: 1,
+    formato: (v) => (v ? signoCarga(v) : "0"), alCambiar: (v) => { ION = v; actualizar(); } });
+  actualizar();
+
+  // Los electrones giran siempre (en Python, FuncAnimation sin pausa); el navegador detiene el bucle si la pestaña no se ve.
+  Sim.animar((dt) => { t += dt; lienzo.pedir(); }).arrancar();
+})();
+</script>
+</body>
+</html>

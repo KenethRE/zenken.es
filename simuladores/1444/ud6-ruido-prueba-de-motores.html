@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Cambia la distancia, el ángulo, los motores y la GPU, y mira el nivel de ruido con y sin protector auditivo.">
+<title>Ruido en una prueba de motores · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .salida { white-space: pre-wrap; }
+  .veredicto { font-weight: 700; margin-top: 10px; }
+  .escena #mapa { max-width: 760px; width: 100%; justify-self: center; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Ruido en una prueba de motores</h1>
+    <p class="sub">UD6 · CE a · b · c · fig. 1 de los apuntes</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div id="mapa"></div>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Mandos</h2><div class="controles" id="mandos"></div></div>
+      <div class="panel"><h2>En el puesto del mecánico</h2><div class="salida" id="salida"></div><div class="salida veredicto" id="aviso"></div></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Vista en planta de un avión de reacción en una prueba de motores en tierra. El mapa colorea el nivel de ruido alrededor del avión con el reparto por sectores de la fig. 1 de los apuntes (UD6): valor máximo en los sectores traseros oblicuos (115°–155° y 205°–245°), de 9 a 18 dB menos a los lados y justo detrás, y de 15 a 25 dB menos por delante.</p>
+      <p>Se mueve al mecánico (distancia y ángulo) y se cambia el número de motores, el grupo eléctrico de tierra (GPU) y el protector.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Preguntas para el alumnado</h2>
+      <ul>
+        <li>¿Cuántos dB sube el nivel al arrancar el segundo motor? ¿Y si te alejas del doble de distancia?</li>
+        <li>¿Dónde te colocarías para hacer la comprobación?</li>
+        <li>¿El GPU de 80 dB cambia mucho el total cuando los motores dan 100 dB?</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Fórmulas (apuntes, apartado 2.1.2)</h2>
+      <ul>
+        <li>N motores iguales al mismo régimen: L = X + 10·log N (2 motores: +3 dB; 4 motores: +6 dB).</li>
+        <li>La intensidad baja con el cuadrado de la distancia: −6 dB cada vez que se dobla la distancia (L = Lref − 20·log(d/dref)).</li>
+        <li>Fuentes distintas (motores + GPU): se suman las energías, no los decibelios: L = 10·log(10^(L1/10) + 10^(L2/10)).</li>
+        <li>Protectores: tapones o cascos atenúan de 10 a 30 dB; mejor los dos a la vez. Valores de la simulación (orientativos): tapones 15 dB, cascos 20 dB, tapones + cascos 25 dB.</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Umbrales</h2>
+      <p>Los apuntes dan dos: 85 dB (límite de seguridad en audición; por encima, tapones o cascos) y, más adelante, 90 dB. Por encima de 120 dB (cerca de los reactores), riesgo de pérdida auditiva permanente (apuntes).</p>
+      <p class="nota-ref">Dato de referencia, NO está en los apuntes: el RD 286/2006 (ruido) fija para la exposición diaria (8 h) un valor inferior de acción de 80 dB(A), un valor superior de acción de 85 dB(A) (protectores obligatorios) y un valor límite de 87 dB(A), que se comprueba teniendo en cuenta la atenuación del protector. La simulación trata el nivel como si durase toda la jornada.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  /* CÁLCULO */
+  const DREF = 25.0;          // distancia de referencia del nivel X (m)
+  const L_GPU = 80.0;         // nivel del GPU en el puesto (dB), fijo
+  const PROTECTORES = [["Sin protector", 0], ["Tapones (−15 dB)", 15], ["Cascos (−20 dB)", 20], ["Tapones + cascos (−25 dB)", 25]];
+  const BANDAS = [0, 80, 85, 87, 100, 120, 200];
+  const COLORES = ["#D7EFD9", "#FFF3B0", "#FFD27A", "#F7A35C", "#E8684A", "#A8231A"];
+
+  // dB por debajo del máximo según la fig. 1 de los apuntes (ángulo desde el morro, en grados, sentido horario)
+  function atenuacionSector(ang) {
+    const a = ((ang % 360) + 360) % 360;
+    if ((a >= 115 && a < 155) || (a > 205 && a <= 245)) return 0.0;                        // traseros oblicuos: valor máximo
+    if ((a >= 75 && a < 115) || (a > 245 && a <= 285) || (a >= 155 && a <= 205)) return 13.5;  // lados y justo detrás: 9–18 dB menos
+    return 20.0;                                                                           // por delante: 15–25 dB menos
+  }
+  const nivel = (xRef, n, d, ang) => xRef + 10 * Math.log10(n) - 20 * Math.log10(Math.max(d, 3.0) / DREF) - atenuacionSector(ang);
+  const sumaDb = (...niv) => 10 * Math.log10(niv.reduce((s, v) => s + 10 ** (v / 10), 0));
+
+  function enPuesto(x, n, d, a, gpu, iProt) {
+    const lMot = nivel(x, n, d, a);
+    const total = gpu ? sumaDb(lMot, L_GPU) : lMot;
+    const prot = PROTECTORES[iProt][1];
+    const oido = total - prot;
+    const sector = atenuacionSector(a);
+    const texto = `1 motor a ${num(d, 0, "m")}: ${num(nivel(x, 1, d, a), 1, "dB")}\n`
+      + `Sector: ${sector === 0 ? "máximo" : "−" + num(sector, 1, "dB")}\n`
+      + `${n} motor${n > 1 ? "es" : ""}: +10·log ${n} = +${num(10 * Math.log10(n), 1, "dB")}\n`
+      + `Motores: ${num(lMot, 1, "dB")}\n`
+      + `${gpu ? "+ GPU " + num(L_GPU, 0, "dB") + " → " + num(total, 1, "dB") : "GPU apagado"}\n`
+      + `Protector: ${prot ? "−" + num(prot, 0, "dB") : "ninguno"}\n`
+      + `En el oído: ${num(oido, 1, "dB")}`;
+    let msg, col;
+    if (total >= 120) { msg = "¡Más de 120 dB! Riesgo de\npérdida permanente: aléjate"; col = C.RED; }
+    else if (total > 85 && prot === 0) { msg = "Más de 85 dB: OBLIGATORIO\nusar tapones o cascos\n(mejor los dos)"; col = C.RED; }
+    else if (oido > 87) { msg = "Supera 87 dB(A) en el oído\n(valor límite RD 286/2006):\naléjate o mejora el protector"; col = C.RED; }
+    else if (total > 85) { msg = "Más de 85 dB: protector\npuesto y nivel en el oído\npor debajo de 87 dB(A)"; col = C.GREEN; }
+    else if (total > 80) { msg = "Entre 80 y 85 dB(A):\nprotectores a disposición\n(valor inferior de acción)"; col = C.BLUE; }
+    else { msg = "Menos de 80 dB(A):\nsin obligación de\nprotección auditiva"; col = C.GREEN; }
+    const colTexto = oido > 87 || (total > 85 && prot === 0) ? C.RED : C.INK;
+    return { lMot, total, oido, texto, msg, col, colTexto };
+  }
+  /* FIN CÁLCULO */
+
+  const R = 100, NG = 241;
+  const XS = Sim.linspace(-R, R, NG);
+  const RGB = COLORES.map((c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)));
+  const banda = (z) => { let i = 0; while (i < BANDAS.length - 2 && z >= BANDAS[i + 1]) i++; return i; };
+  const st = { d: 30, a: 135, x: 105, n: 2, prot: 0, gpu: true };
+  let r = null;
+
+  // Mapa en una imagen de 241 × 241 celdas (como el pcolormesh del Python)
+  const img = document.createElement("canvas");
+  img.width = NG; img.height = NG;
+  const ictx = img.getContext("2d");
+  const datos = ictx.createImageData(NG, NG);
+  function pintarMapa() {
+    for (let j = 0; j < NG; j++) {          // j: fila de la imagen (arriba = y máximo)
+      const y = XS[NG - 1 - j];
+      for (let i = 0; i < NG; i++) {
+        const x = XS[i];
+        const d = Math.hypot(x, y), ang = Math.atan2(x, y) * 180 / Math.PI;   // 0° = morro (arriba), sentido horario
+        let z = nivel(st.x, st.n, d, ang);
+        if (st.gpu) z = sumaDb(z, L_GPU);
+        const c = RGB[banda(z)], p = 4 * (j * NG + i);
+        datos.data[p] = c[0]; datos.data[p + 1] = c[1]; datos.data[p + 2] = c[2]; datos.data[p + 3] = 255;
+      }
+    }
+    ictx.putImageData(datos, 0, 0);
+  }
+
+  // Silueta sencilla de un avión de reacción (unos 38 m de largo), morro hacia arriba
+  const FUS = [[0, 19], [1.8, 15], [2, -14], [0.8, -19], [-0.8, -19], [-2, -14], [-1.8, 15]];
+  const ALA = [[2, 4], [17, -6], [17, -8.5], [2, -2], [-2, -2], [-17, -8.5], [-17, -6], [-2, 4]];
+  const COLA = [[1.2, -13], [6.5, -18], [6.5, -19.5], [0.8, -17], [-0.8, -17], [-6.5, -19.5], [-6.5, -18], [-1.2, -13]];
+
+  const mapa = new Sim.Lienzo("#mapa", {
+    proporcion: 0.9, altoMax: 720, etiqueta: "Mapa del nivel de ruido alrededor del avión",
+    dibujar(ctx, w, h) {
+      if (!r) return;
+      const izq = 46, arr = 12, leyW = 56, aba = 44;
+      const s = Math.max(100, Math.min(w - izq - leyW - 8, h - arr - aba));
+      const x0 = izq, y0 = arr;
+      const px = (x) => x0 + (x + R) / (2 * R) * s, py = (y) => y0 + (R - y) / (2 * R) * s;
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      const c = s / (NG - 1);   // las celdas están centradas en los puntos de la rejilla
+      ctx.beginPath(); ctx.rect(x0, y0, s, s); ctx.clip();
+      ctx.drawImage(img, x0 - c / 2, y0 - c / 2, s + c, s + c);
+      for (const a of [75, 115, 155, 205, 245, 285]) {
+        const ra = a * Math.PI / 180;
+        Sim.polilinea(ctx, [[px(0), py(0)], [px(R * 1.4 * Math.sin(ra)), py(R * 1.4 * Math.cos(ra))]], { color: C.MUTED, ancho: 1, guion: "punto" });
+      }
+      for (const p of [ALA, COLA, FUS]) Sim.polilinea(ctx, p.map(([x, y]) => [px(x), py(y)]), { color: C.NAVY, ancho: 1.6, relleno: C.WHITE, cerrar: true });
+      ctx.fillStyle = C.MUTED;
+      for (const sx of [-7.5, 7.5]) ctx.fillRect(px(sx - 1.1), py(3.5), px(2.2) - px(0), py(-1.5) - py(3.5));
+      ctx.restore();
+      ctx.save(); ctx.strokeStyle = C.MUTED; ctx.lineWidth = 1.2; ctx.strokeRect(x0, y0, s, s); ctx.restore();
+      for (const v of [-100, -50, 0, 50, 100]) {
+        Sim.texto(ctx, num(v, 0), px(v), y0 + s + 6, { tam: 13, alin: "center", base: "top" });
+        Sim.texto(ctx, num(v, 0), x0 - 6, py(v), { tam: 13, alin: "right", base: "middle" });
+      }
+      Sim.texto(ctx, "m", x0 + s / 2, y0 + s + 24, { tam: 14, alin: "center", base: "top" });
+      // mecánico
+      const mx = st.d * Math.sin(st.a * Math.PI / 180), my = st.d * Math.cos(st.a * Math.PI / 180);
+      Sim.circulo(ctx, px(mx), py(my), 10, { relleno: C.GOLD, color: C.NAVY, ancho: 2.5 });
+      const der = mx < 60;
+      Sim.texto(ctx, num(r.total, 0, "dB"), px(mx + (der ? 4 : -4)), py(my + 4), { tam: 15, negrita: true, color: C.NAVY, alin: der ? "left" : "right", fondo: C.WHITE, pad: 4 });
+      // leyenda de bandas
+      const lx = x0 + s + 14, lw = 14, bh = s / COLORES.length;
+      COLORES.forEach((col, i) => { ctx.fillStyle = col; ctx.fillRect(lx, y0 + s - (i + 1) * bh, lw, bh); });
+      ctx.save(); ctx.strokeStyle = C.LINE; ctx.strokeRect(lx, y0, lw, s); ctx.restore();
+      ["80", "85", "87", "100", "120"].forEach((t, i) => Sim.texto(ctx, t, lx + lw + 4, y0 + s - (i + 1) * bh, { tam: 12, base: "middle" }));
+      Sim.texto(ctx, "dB", lx + lw / 2, y0 - 2 + 0, { tam: 12, alin: "center", base: "top", negrita: true, fondo: C.WHITE, pad: 1 });
+    },
+  });
+
+  const salida = document.getElementById("salida");
+  const aviso = document.getElementById("aviso");
+  function actualizar(conMapa = true) {
+    r = enPuesto(st.x, st.n, st.d, st.a, st.gpu, st.prot);
+    if (conMapa) pintarMapa();
+    salida.textContent = r.texto;
+    salida.style.color = r.colTexto;
+    aviso.textContent = r.msg;
+    aviso.style.color = r.col;
+    mapa.pedir();
+  }
+
+  Sim.deslizador("#mandos", { etiqueta: "Distancia", min: 5, max: 100, valor: 30, paso: 1, unidad: "m", dec: 0, alCambiar: (v) => { st.d = v; actualizar(false); } });
+  Sim.deslizador("#mandos", { etiqueta: "Ángulo (0° = morro)", min: 0, max: 355, valor: 135, paso: 5, unidad: "°", dec: 0, alCambiar: (v) => { st.a = v; actualizar(false); } });
+  Sim.deslizador("#mandos", { etiqueta: `X (1 motor a ${num(DREF, 0)} m)`, min: 90, max: 125, valor: 105, paso: 1, unidad: "dB", dec: 0, alCambiar: (v) => { st.x = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "N.º de motores", min: 1, max: 4, valor: 2, paso: 1, dec: 0, alCambiar: (v) => { st.n = v; actualizar(); } });
+  Sim.opciones("#mandos", { titulo: "Protector auditivo", etiquetas: PROTECTORES.map((p) => p[0]), activa: 0, alCambiar: (i) => { st.prot = i; actualizar(false); } });
+  Sim.casillas("#mandos", { etiquetas: [`GPU en marcha (${num(L_GPU, 0, "dB")})`], marcadas: [true], alCambiar: (i, v) => { st.gpu = v; actualizar(); } });
+  actualizar();
+})();
+</script>
+</body>
+</html>

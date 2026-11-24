@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Baja y sube la señal del comprobador hasta que el tono vuelve a oírse, y anota la sensibilidad del receptor VHF.">
+<title>Receptor VHF: sensibilidad y squelch · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .altavoz { background: var(--card); border: 3px solid var(--muted); border-radius: var(--radius); padding: 14px 16px; text-align: center; display: grid; gap: 4px; }
+  .altavoz .grande { font-size: clamp(1.8rem, 4vw, 2.4rem); font-weight: 700; line-height: 1.1; }
+  .altavoz .peq { white-space: pre-line; }
+  .aviso-vhf { font-weight: 700; white-space: pre-line; margin: 0; }
+  .dos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 14px; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Receptor VHF: sensibilidad y squelch</h1>
+    <p class="sub">UD4 · CE g · comprobador NAV-402AP (OUT)</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div class="dos">
+        <div id="grafica"></div>
+        <div class="lateral">
+          <div class="altavoz" id="altavoz" aria-live="polite"><div class="grande" id="alt1"></div><div class="peq" id="alt2"></div></div>
+          <div class="panel"><p class="aviso-vhf" id="aviso"></p></div>
+        </div>
+      </div>
+      <div class="tarjeta"><h2>Mandos</h2><div class="controles" id="mandos"></div></div>
+    </div>
+    <aside class="lateral">
+      <div class="panel"><h2>Prueba de sensibilidad</h2><div class="salida" id="salida"></div></div>
+      <div class="tarjeta"><div class="controles" id="mandos2"></div></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Simula la prueba de sensibilidad con el comprobador NAV-402AP: el cable de antena va a la salida OUT, el comprobador genera el tono de 1020 Hz y con el mando OUTPUT (en −dBm) se baja la señal desde −67 dBm hasta que el tono deja de oírse y luego se sube despacio hasta que vuelve. Ese valor es la sensibilidad con la que el equipo abre el squelch.</p>
+      <p>Elige el estado de la instalación (coaxial o conector en mal estado, receptor desajustado) y observa cómo cambia el valor anotado.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Preguntas para el alumnado</h2>
+      <ul>
+        <li>¿Por qué hay que volver despacio y anotar cuando el tono REAPARECE y no cuando desaparece?</li>
+        <li>¿Qué significa que el valor anotado sea menos negativo de lo normal?</li>
+        <li>¿Por qué esta prueba comprueba también el coaxial?</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Datos de referencia</h2>
+      <p class="nota-ref">Los niveles del receptor, las pérdidas y el valor del manual son de ejemplo (no están en los apuntes): el squelch abre a −101 dBm en el receptor y se cierra 3 dB por debajo; el manual de ejemplo pide abrir con −95 dBm o menos.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  /* calc:inicio */
+  // estado: [pérdidas entre la salida del comprobador y el receptor en dB, umbral de apertura del squelch en el receptor en dBm]
+  const ESTADOS = { "Instalación correcta": [1.0, -101.0], "Coaxial dañado": [8.0, -101.0], "Conector de antena oxidado": [12.0, -101.0],
+    "Receptor desajustado": [1.0, -89.0] };
+  const NOMBRES = Object.keys(ESTADOS);
+  const HISTERESIS = 3.0; // el squelch se cierra 3 dB por debajo del nivel al que se abre
+  const MANUAL = -95.0;   // valor de ejemplo del manual: el squelch debe abrir con −95 dBm o menos
+  const YMIN = -120, YMAX = -60;
+  const dbm = (v, unidad = "dBm") => num(v, 0, unidad); // Sim.num ya escribe el signo menos tipográfico
+
+  // Un paso del mando OUTPUT: actualiza el estado del squelch (con histéresis) y devuelve los textos
+  function paso(st, out, reiniciar) {
+    const [perdida, umbral] = ESTADOS[st.estado];
+    const rx = out - perdida, cierre = umbral - HISTERESIS;
+    if (reiniciar) Object.assign(st, { abierto: rx >= umbral, anotado: null, cerro: null });
+    else if (st.abierto && rx < cierre) { st.abierto = false; st.cerro = out; }
+    else if (!st.abierto && rx >= umbral) { st.abierto = true; st.anotado = out; }
+    const anot = st.anotado;
+    const salida = [`Sale del comprobador: ${dbm(out)}`, `Pérdidas (coaxial y conectores): ${num(perdida, 0, "dB")}`,
+      `Llega al receptor: ${dbm(rx)}`, "",
+      `Se cerró (bajando) en: ${st.cerro !== null ? dbm(st.cerro) : "—"}`,
+      `Reapareció (subiendo) en: ${anot !== null ? dbm(anot) : "—"}`, "",
+      "Manual del equipo (ejemplo):", `abrir con ${dbm(MANUAL)} o menos`].join("\n");
+    let aviso, tipo;
+    if (anot === null) { aviso = "Valor anotado: —\n\nBaja hasta el silencio y vuelve despacio."; tipo = "gris"; }
+    else if (anot <= MANUAL) { aviso = `Valor anotado: ${dbm(anot)}\n\nDentro del manual: receptor, coaxial y conectores bien.`; tipo = "ok"; }
+    else { aviso = `Valor anotado: ${dbm(anot)}\n\nFUERA del manual: revisa coaxial, conectores y el receptor.`; tipo = "mal"; }
+    return { out, rx, perdida, umbral, cierre, abierto: st.abierto, salida, aviso, tipo };
+  }
+  /* calc:fin */
+
+  const st = { estado: NOMBRES[0], abierto: true, anotado: null, cerro: null };
+  let OUT = -67, P = paso(st, OUT, true);
+
+  const lienzo = new Sim.Lienzo("#grafica", {
+    proporcion: 1.0, altoMin: 320, altoMax: 520, etiqueta: "Nivel de señal a la salida del comprobador y en el receptor",
+    dibujar(ctx, w, h, L) {
+      const ej = new Sim.Ejes(L, ctx, { xlim: [0, 3], ylim: [YMIN, YMAX], ylabel: "Nivel de señal (dBm)", xticks: [0.75, 2.25],
+        fmtx: (v) => (v < 1.5 ? "Sale del\ncomprobador" : "Llega al\nreceptor"), fmty: (v) => dbm(v, ""), margen: { aba: 46, izq: 66 } });
+      ej.marco();
+      ej.barras([0.75], [P.out], 0.9, { color: C.GOLD, base: YMIN });
+      ej.barras([2.25], [P.rx], 0.9, { color: C.NAVY, base: YMIN });
+      ej.recortar(); ctx.strokeStyle = C.NAVY; ctx.lineWidth = 1.5;
+      ctx.strokeRect(ej.px(0.3), ej.py(P.out), ej.px(1.2) - ej.px(0.3), ej.py(YMIN) - ej.py(P.out)); ej.soltar();
+      ej.hline(P.umbral, { color: C.GREEN, guion: true, ancho: 1.8 });
+      ej.hline(P.cierre, { color: C.RED, guion: "punto", ancho: 1.8 });
+      ej.texto(2.98, P.umbral, "abre", { tam: 13, alin: "right", base: "bottom", color: C.GREEN });
+      ej.texto(2.98, P.cierre, "cierra", { tam: 13, alin: "right", base: "top", color: C.RED });
+      Sim.flecha(ctx, ej.px(0.75), ej.py(P.out + 1.5), ej.px(2.25), ej.py(P.rx + 1.5), { color: C.MUTED, ancho: 1.5 });
+      ej.texto(1.5, Math.min(P.out + 4, YMAX - 3), `pérdidas: −${num(P.perdida, 0, "dB")}`, { tam: 13, alin: "center", color: C.MUTED });
+    },
+  });
+
+  const alt = document.getElementById("altavoz"), salida = document.getElementById("salida"), aviso = document.getElementById("aviso");
+  const COLOR = { gris: C.MUTED, ok: C.GREEN, mal: C.RED };
+  function mostrar() {
+    const a1 = document.getElementById("alt1"), a2 = document.getElementById("alt2");
+    if (P.abierto) { a1.textContent = "♪ 1020 Hz"; a1.style.color = C.GREEN; a2.textContent = "Squelch ABIERTO:\nse oye el tono"; alt.style.borderColor = C.GREEN; }
+    else { a1.textContent = "Silencio"; a1.style.color = C.MUTED; a2.textContent = "Squelch CERRADO:\nno se oye"; alt.style.borderColor = C.MUTED; }
+    salida.textContent = P.salida;
+    aviso.textContent = P.aviso;
+    aviso.style.color = COLOR[P.tipo];
+    lienzo.pedir();
+  }
+
+  Sim.deslizador("#mandos", { etiqueta: "OUTPUT (comprobador)", min: YMIN, max: -60, valor: OUT, paso: 1, formato: (v) => dbm(v),
+    alCambiar: (v) => { OUT = v; P = paso(st, OUT, false); mostrar(); } });
+  document.getElementById("mandos").append(Sim.el("p", { class: "nota-ref", text: "Baja desde −67 dBm hasta que deje de oírse el tono; después sube despacio hasta que reaparezca y anota ese valor." }));
+  Sim.opciones("#mandos2", { titulo: "Estado de la instalación", etiquetas: NOMBRES, activa: 0,
+    alCambiar: (i, t) => { st.estado = t; P = paso(st, OUT, true); mostrar(); } });
+  mostrar();
+})();
+</script>
+</body>
+</html>

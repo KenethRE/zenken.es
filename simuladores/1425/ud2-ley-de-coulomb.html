@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Cambia las dos cargas y la distancia, y mira las líneas de campo y cómo baja la fuerza con el cuadrado de la distancia.">
+<title>Ley de Coulomb · 1425</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .formula { margin: 0 0 4px; color: var(--muted); }
+  .f-grande { margin: 0; font-size: 1.7rem; font-weight: 700; color: #0E1B2C; font-variant-numeric: tabular-nums; }
+  .tipo { margin: 2px 0 8px; font-size: 1.1rem; font-weight: 700; }
+  .cuenta { margin: 0 0 8px; overflow-wrap: anywhere; }
+  .aviso-u { margin: 0; color: var(--muted); font-style: italic; font-size: .93rem; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1425 Fundamentos de electricidad</a></p>
+    <h1>Ley de Coulomb</h1>
+    <p class="sub">UD 2 · Electricidad estática · F = K · |q₁ · q₂| / r², K = 9·10⁹ N·m²/C²</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div id="campo"></div>
+      <div id="curva"></div>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Mandos</h2><div class="controles" id="mandos"></div></div>
+      <div class="panel"><h2>Resultado</h2><div id="salida"></div></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Dos cargas puntuales en el aire. Cambia sus valores (en µC) y la distancia (en cm) y observa.</p>
+      <p class="nota-ref">K = 1 / (4·π·ε₀), con ε₀ = 8,85·10⁻¹² C²/(N·m²). Las flechas de fuerza crecen con F, pero no son proporcionales a ella.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Qué observar</h2>
+      <ul>
+        <li>las líneas de campo (salen de las cargas + y entran en las −);</li>
+        <li>la fuerza sobre cada carga (atracción o repulsión) y su valor, F = K·|q₁·q₂| / r²;</li>
+        <li>la curva F–r: si la distancia se duplica, la fuerza se divide entre 4.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1425 · Fundamentos de electricidad · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C } = Sim;
+  const DARK = "#0E1B2C", ACC = "#00A6D6", AMB = "#F2A33A", RED = "#E4572E", GREY = "#9AA5B1", MUTED = "#4B5A6E";
+
+  // ── cálculo (puro) ───────────────────────────────────────────────
+  const K = 9e9; // N·m²/C²
+  const SUP = { "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴", "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹", "-": "⁻" };
+  // Número con coma decimal; notación científica si es muy grande o muy pequeño (igual que num() del Python)
+  function numC(x, dec = 2) {
+    if (x === 0) return "0";
+    if (Math.abs(x) >= 1e-2 && Math.abs(x) < 1e4) {
+      return x.toFixed(dec).replace(/0+$/, "").replace(/\.$/, "").replace(".", ",").replace("-", "−");
+    }
+    const [m, e] = x.toExponential(2).split("e");
+    return `${m.replace(".", ",")}·10${String(parseInt(e, 10)).replace(/./g, (c) => SUP[c])}`;
+  }
+  const fuerza = (q1, q2, r) => K * Math.abs(q1 * q2) * 1e-12 / (r / 100) ** 2; // q en µC, r en cm → N
+  function coulomb(q1, q2, r) {
+    const F = fuerza(q1, q2, r);
+    const atrac = q1 * q2 < 0;
+    let tipo;
+    if (F === 0) tipo = ["Sin fuerza: una de las cargas es nula", MUTED];
+    else tipo = atrac ? ["ATRACCIÓN (signos distintos)", ACC] : ["REPULSIÓN (mismo signo)", RED];
+    return {
+      F, atrac, tipo, Ftxt: `F = ${numC(F, 3)} N`,
+      cuenta: `F = 9·10⁹ · ${numC(Math.abs(q1))}·10⁻⁶ · ${numC(Math.abs(q2))}·10⁻⁶ / ${numC(r / 100)}²`,
+    };
+  }
+  // ── fin cálculo ──────────────────────────────────────────────────
+
+  let q1 = 2, q2 = -4, r = 20;
+  const XL = 42, YL = 26;
+  const colorCarga = (q) => (q > 0 ? RED : (q < 0 ? ACC : GREY));
+  const radio = (q) => 1.6 + 0.25 * Math.abs(q);
+
+  // Campo con la misma suavización que el Python (distancia mínima 1 cm)
+  function campo(x, y, cargas) {
+    let ex = 0, ey = 0;
+    for (const [q, xq] of cargas) {
+      const dx = x - xq, dy = y, d3 = Math.max(Math.hypot(dx, dy), 1) ** 3;
+      ex += q * dx / d3; ey += q * dy / d3;
+    }
+    return [ex, ey];
+  }
+  // Traza una línea de campo desde (x, y); sentido +1 = a favor del campo, −1 = en contra
+  function trazar(x, y, sentido, cargas) {
+    const pts = [[x, y]], h = 0.35;
+    let prev = null;
+    for (let i = 0; i < 900; i++) {
+      let [ex, ey] = campo(x, y, cargas); let n = Math.hypot(ex, ey); if (n < 1e-12) break;
+      const mx = x + sentido * h / 2 * ex / n, my = y + sentido * h / 2 * ey / n;
+      [ex, ey] = campo(mx, my, cargas); n = Math.hypot(ex, ey); if (n < 1e-12) break;
+      const dx = sentido * h * ex / n, dy = sentido * h * ey / n;
+      if (prev && dx * prev[0] + dy * prev[1] < 0) break; // punto de campo nulo
+      prev = [dx, dy]; x += dx; y += dy; pts.push([x, y]);
+      if (Math.abs(x) > XL + 2 || Math.abs(y) > YL + 2) break;
+      if (cargas.some(([q, xq]) => q && Math.hypot(x - xq, y) < radio(q) * 0.8)) break;
+    }
+    return pts;
+  }
+  let lineas = [];
+  function calcularLineas() {
+    const cargas = [[q1, -r / 2], [q2, r / 2]];
+    let fuentes;
+    if (q1 * q2 < 0) { // todas las líneas de la carga menor acaban en la mayor: basta con trazar desde la mayor
+      const i = Math.abs(q1) > Math.abs(q2) ? 0 : (Math.abs(q2) > Math.abs(q1) ? 1 : (q1 > 0 ? 0 : 1));
+      fuentes = [cargas[i]];
+    } else fuentes = cargas.filter(([q]) => q !== 0);
+    lineas = [];
+    for (const [q, xq] of fuentes) {
+      const n = Math.round(8 + 1.4 * Math.abs(q)), sentido = q > 0 ? 1 : -1, r0 = radio(q) + 0.15;
+      for (let j = 0; j < n; j++) {
+        const a = 2 * Math.PI * (j + 0.5) / n;
+        lineas.push({ pts: trazar(xq + r0 * Math.cos(a), r0 * Math.sin(a), sentido, cargas), sentido });
+      }
+    }
+  }
+
+  const lCampo = new Sim.Lienzo("#campo", {
+    proporcion: 52 / 84, etiqueta: "Dos cargas con sus líneas de campo y las fuerzas entre ellas",
+    dibujar(ctx, w, h) {
+      const k = w / (2 * XL), X = (x) => w / 2 + x * k, Y = (y) => h / 2 - y * k;
+      const tam = Math.max(11, Math.min(15, w / 60));
+      // líneas de campo con una punta de flecha en su mitad
+      for (const { pts, sentido } of lineas) {
+        if (pts.length < 3) continue;
+        Sim.polilinea(ctx, pts.map(([x, y]) => [X(x), Y(y)]), { color: "#9DB7C9", ancho: 1.1 });
+        const m = Math.floor(pts.length / 2), [xa, ya] = pts[m - 1], [xb, yb] = pts[m + 1];
+        const ang = Math.atan2(-(yb - ya) * sentido, (xb - xa) * sentido), L = 7;
+        const px = X(pts[m][0]), py = Y(pts[m][1]);
+        ctx.save(); ctx.fillStyle = "#9DB7C9"; ctx.beginPath();
+        ctx.moveTo(px + L * Math.cos(ang), py + L * Math.sin(ang));
+        ctx.lineTo(px + L * Math.cos(ang + 2.5), py + L * Math.sin(ang + 2.5));
+        ctx.lineTo(px + L * Math.cos(ang - 2.5), py + L * Math.sin(ang - 2.5));
+        ctx.closePath(); ctx.fill(); ctx.restore();
+      }
+      const x1 = -r / 2, x2 = r / 2;
+      const { F, atrac } = coulomb(q1, q2, r);
+      [[q1, x1, "q₁"], [q2, x2, "q₂"]].forEach(([q, xq, nombre]) => {
+        const rad = radio(q);
+        Sim.circulo(ctx, X(xq), Y(0), rad * k, { relleno: colorCarga(q), color: "#FFFFFF", ancho: 1.5 });
+        Sim.texto(ctx, q > 0 ? "+" : (q < 0 ? "−" : "0"), X(xq), Y(0) + 1, { tam: Math.max(14, Math.min(20, rad * k * 1.2)), negrita: true, color: "#FFFFFF", alin: "center", base: "middle" });
+      });
+      [[q1, x1, "q₁"], [q2, x2, "q₂"]].forEach(([q, xq, nombre]) => {
+        Sim.texto(ctx, `${nombre} = ${numC(q)} µC`, X(xq), Y(-radio(q) - 2.6), { tam, negrita: true, color: colorCarga(q), alin: "center", base: "middle", fondo: "rgba(255,255,255,0.85)", pad: 3 });
+      });
+      // fuerzas (flechas sobre cada carga; longitud creciente con F, no proporcional)
+      if (F > 0) {
+        const L = 3 + 10 * F / (F + 3);
+        for (const [xq, otro, q] of [[x1, x2, q1], [x2, x1, q2]]) {
+          const hacia = atrac ? Math.sign(otro - xq) : -Math.sign(otro - xq);
+          const ini = xq + hacia * radio(q);
+          Sim.flecha(ctx, X(ini), Y(0), X(ini + hacia * L), Y(0), { color: DARK, ancho: 3.5, punta: 14 });
+        }
+        Sim.texto(ctx, "F", X(0), Y(r > 12 ? 5.5 : 7.5), { tam: tam + 3, negrita: true, color: DARK, alin: "center" });
+      }
+      // cota de la distancia
+      Sim.flecha(ctx, X(0), Y(-15), X(x2), Y(-15), { color: MUTED, ancho: 1.2, punta: 8 });
+      Sim.flecha(ctx, X(0), Y(-15), X(x1), Y(-15), { color: MUTED, ancho: 1.2, punta: 8 });
+      Sim.texto(ctx, `r = ${numC(r)} cm`, X(0), Y(-18.5), { tam, color: MUTED, alin: "center", base: "middle", fondo: "rgba(255,255,255,0.9)", pad: 3 });
+    },
+  });
+
+  const RR = Sim.linspace(5, 50, 300);
+  const lCurva = new Sim.Lienzo("#curva", {
+    proporcion: 0.5, altoMin: 260, altoMax: 380, etiqueta: "Curva de la fuerza frente a la distancia",
+    dibujar(ctx, w, h, L) {
+      const { F } = coulomb(q1, q2, r);
+      const ff = RR.map((x) => fuerza(q1, q2, x));
+      const fmax = Math.max(...ff);
+      const ej = new Sim.Ejes(L, ctx, {
+        xlim: [5, 50], ylim: [0, fmax > 0 ? fmax * 1.05 : 1], xlabel: "distancia r (cm)", ylabel: "fuerza F (N)",
+        titulo: "La fuerza disminuye con el cuadrado de la distancia",
+      });
+      ej.marco();
+      ej.linea(RR, ff, { color: ACC, ancho: 2.5 });
+      if (F > 0 && 2 * r <= 50) {
+        const xt = 2 * r + 3, yt = F / 4 + 0.25 * fmax;
+        ctx.save(); Sim.trazo(ctx, { color: MUTED, ancho: 1 }); ctx.beginPath();
+        ctx.moveTo(ej.px(2 * r), ej.py(F / 4)); ctx.lineTo(ej.px(xt), ej.py(yt)); ctx.stroke(); ctx.restore();
+        Sim.texto(ctx, "2r → F/4", ej.px(xt) + 3, ej.py(yt), { tam: 13, color: MUTED, base: "bottom" });
+        ej.punto(2 * r, F / 4, { color: "#FFFFFF", borde: DARK, radio: 6 });
+      }
+      ej.punto(r, F, { color: AMB, borde: DARK, radio: 7 });
+    },
+  });
+
+  const salida = document.getElementById("salida");
+  function actualizar() {
+    const R = coulomb(q1, q2, r);
+    salida.innerHTML =
+      `<p class="f-grande">${R.Ftxt}</p>` +
+      `<p class="tipo" style="color:${R.tipo[1]}">${R.tipo[0]}</p>` +
+      `<p class="cuenta">${R.cuenta}</p>` +
+      `<p class="aviso-u">Cuidado con las unidades: µC → C (×10⁻⁶) y cm → m (÷100)</p>`;
+    calcularLineas();
+    lCampo.pedir(); lCurva.pedir();
+  }
+
+  Sim.deslizador("#mandos", { etiqueta: "q₁ (µC)", min: -10, max: 10, valor: q1, paso: 0.5, formato: (v) => numC(v), alCambiar: (v) => { q1 = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "q₂ (µC)", min: -10, max: 10, valor: q2, paso: 0.5, formato: (v) => numC(v), alCambiar: (v) => { q2 = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "distancia r (cm)", min: 5, max: 50, valor: r, paso: 1, formato: (v) => numC(v), alCambiar: (v) => { r = v; actualizar(); } });
+  actualizar();
+})();
+</script>
+</body>
+</html>

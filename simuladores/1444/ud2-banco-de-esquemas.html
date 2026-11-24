@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Juega a reconocer símbolos, montar circuitos, encontrar averías y leer esquemas eléctricos de avión.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<title>Banco de esquemas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="ud2-banco-de-esquemas.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Banco de <span>esquemas</span></h1>
+      <p>Módulo 1444 · UD2 Montaje de circuitos eléctricos y electrónicos · Barra de 28 V CC</p>
+    </div>
+    <div class="plate" id="best">Mejores marcas · —</div>
+  </header>
+
+  <div class="modes" role="tablist" aria-label="Modos de juego">
+    <button role="tab" id="tab-simbolos" aria-selected="true" data-mode="simbolos">¿Qué símbolo es?<small>12 símbolos contra reloj</small></button>
+    <button role="tab" id="tab-montar" aria-selected="false" data-mode="montar">Monta el circuito<small>4 órdenes de trabajo</small></button>
+    <button role="tab" id="tab-averia" aria-selected="false" data-mode="averia">Encuentra la avería<small>Polímetro virtual</small></button>
+    <button role="tab" id="tab-leer" aria-selected="false" data-mode="leer">Lee el esquema<small>Luces de aterrizaje</small></button>
+  </div>
+
+  <main id="app"></main>
+
+  <footer>
+    <span>Símbolos según la UNE-EN 60617 y los apuntes de la UD1 y la UD2.</span>
+    <span>Los circuitos son ejemplos didácticos de 28 V CC, no los de un avión concreto.</span>
+  </footer>
+</div>
+
+<script>
+(() => {
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const NS = "http://www.w3.org/2000/svg";
+const fmt = (x, d = 1) => x.toFixed(d).replace(".", ",");
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+/* ---------- Mejores marcas (solo en este navegador) ---------- */
+const BEST_KEY = "banco-esquemas-best";
+function loadBest() { try { return JSON.parse(localStorage.getItem(BEST_KEY)) || {}; } catch (e) { return {}; } }
+function saveBest(mode, pts) {
+  const b = loadBest(); if (!(mode in b) || pts > b[mode]) { b[mode] = pts; try { localStorage.setItem(BEST_KEY, JSON.stringify(b)); } catch (e) {} }
+  showBest();
+}
+function showBest() {
+  const b = loadBest(); const n = { simbolos: "Símbolos", montar: "Montaje", averia: "Avería", leer: "Esquema" };
+  const parts = Object.keys(n).filter(k => k in b).map(k => `${n[k]} ${b[k]}`);
+  $("#best").textContent = "Mejores marcas · " + (parts.length ? parts.join(" · ") : "—");
+}
+showBest();
+
+/* ---------- Biblioteca de símbolos (horizontales, de x=0 a x=L) ---------- */
+const L = 80, M = L / 2;
+const ln = (x1, y1, x2, y2, c = "s") => `<line class="${c}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+const leads = (a, b) => ln(0, 0, a, 0) + ln(b, 0, L, 0);
+const arrowHead = (x, y, ang) => { const a = ang * Math.PI / 180, s = 7; const p1 = [x - s * Math.cos(a - 0.45), y - s * Math.sin(a - 0.45)], p2 = [x - s * Math.cos(a + 0.45), y - s * Math.sin(a + 0.45)]; return `<path class="fillink" d="M${x} ${y} L${p1[0]} ${p1[1]} L${p2[0]} ${p2[1]} Z"/>`; };
+const circleSym = (letter, extra = "") => leads(M - 15, M + 15) + `<g class="rotor-wrap"><circle class="s lampbody" cx="${M}" cy="0" r="15" style="fill:var(--sheet)"/>${extra}<text class="txt" x="${M}" y="5" text-anchor="middle" style="font-size:15px">${letter}</text></g>`;
+const SYM = {
+  bateria: { n: "Batería", g: "fuente", d: () => leads(M - 12, M + 12) + ln(M - 12, -16, M - 12, 16) + `<line class="s" x1="${M - 5}" y1="-8" x2="${M - 5}" y2="8" style="stroke-width:5"/>` + ln(M + 3, -16, M + 3, 16) + `<line class="s" x1="${M + 10}" y1="-8" x2="${M + 10}" y2="8" style="stroke-width:5"/>` + ln(M - 12, 0, M - 12, 0) + `<text class="txt" x="${M - 22}" y="-12">+</text>` },
+  pila: { n: "Pila o elemento", g: "fuente", d: () => leads(M - 4, M + 4) + ln(M - 4, -16, M - 4, 16) + `<line class="s" x1="${M + 4}" y1="-8" x2="${M + 4}" y2="8" style="stroke-width:5"/>` + `<text class="txt" x="${M - 16}" y="-12">+</text>` },
+  resistencia: { n: "Resistencia", g: "pasivo", d: () => leads(M - 18, M + 18) + `<rect class="s" x="${M - 18}" y="-7" width="36" height="14"/>` },
+  reostato: { n: "Resistencia variable (reóstato)", g: "pasivo", d: () => leads(M - 18, M + 18) + `<rect class="s" x="${M - 18}" y="-7" width="36" height="14"/>` + ln(M - 20, 14, M + 18, -14) + arrowHead(M + 20, -15.5, -36) },
+  potenciometro: { n: "Potenciómetro", g: "pasivo", d: () => leads(M - 18, M + 18) + `<rect class="s" x="${M - 18}" y="-7" width="36" height="14"/>` + ln(M, -26, M, -10) + arrowHead(M, -8, 90) },
+  condensador: { n: "Condensador", g: "pasivo", d: () => leads(M - 4, M + 4) + ln(M - 4, -15, M - 4, 15) + ln(M + 4, -15, M + 4, 15) },
+  electrolitico: { n: "Condensador electrolítico", g: "pasivo", d: () => leads(M - 5, M + 4) + `<rect class="s" x="${M - 9}" y="-14" width="4" height="28"/>` + `<rect class="fillink" x="${M + 4}" y="-14" width="5" height="28"/>` + `<text class="txt" x="${M - 22}" y="-12">+</text>` },
+  bobina: { n: "Bobina (inductancia)", g: "pasivo", d: () => leads(M - 24, M + 24) + `<path class="s" d="M${M - 24} 0 a6 6 0 0 1 12 0 a6 6 0 0 1 12 0 a6 6 0 0 1 12 0 a6 6 0 0 1 12 0"/>` },
+  diodo: { n: "Diodo", g: "semi", d: () => leads(M - 10, M + 8) + `<path class="fillink" d="M${M - 10} -10 L${M - 10} 10 L${M + 8} 0 Z"/>` + ln(M + 8, -11, M + 8, 11) },
+  led: { n: "Diodo LED", g: "semi", d: () => SYM.diodo.d() + ln(M + 2, -14, M + 12, -24) + arrowHead(M + 13, -25, -45) + ln(M + 9, -10, M + 19, -20) + arrowHead(M + 20, -21, -45) },
+  zener: { n: "Diodo Zener", g: "semi", d: () => leads(M - 10, M + 8) + `<path class="fillink" d="M${M - 10} -10 L${M - 10} 10 L${M + 8} 0 Z"/>` + `<path class="s" d="M${M + 3} -13 L${M + 8} -11 L${M + 8} 11 L${M + 13} 13"/>` },
+  fusible: { n: "Fusible", g: "proteccion", d: () => ln(0, 0, L, 0) + `<rect class="s" x="${M - 18}" y="-7" width="36" height="14" style="fill:none"/>` },
+  disyuntor: { n: "Disyuntor (breaker)", g: "proteccion", d: () => leads(M - 16, M + 16) + `<circle class="s" cx="${M - 16}" cy="0" r="3" style="fill:var(--sheet)"/><circle class="s" cx="${M + 16}" cy="0" r="3" style="fill:var(--sheet)"/><path class="s" d="M${M - 15} -4 Q${M} -22 ${M + 15} -4"/>` + ln(M, -13, M, -22) + ln(M - 6, -22, M + 6, -22) },
+  interruptor: { n: "Interruptor", g: "mando", d: () => leads(M - 16, M + 16) + `<circle class="fillink" cx="${M - 16}" cy="0" r="3"/><circle class="s" cx="${M + 16}" cy="0" r="3" style="fill:var(--sheet)"/>` + ln(M - 16, 0, M + 14, -14) },
+  conmutador: { n: "Conmutador", g: "mando", d: () => ln(0, 0, M - 16, 0) + `<circle class="fillink" cx="${M - 16}" cy="0" r="3"/>` + ln(M - 16, 0, M + 12, -12) + `<circle class="s" cx="${M + 16}" cy="-14" r="3" style="fill:var(--sheet)"/><circle class="s" cx="${M + 16}" cy="10" r="3" style="fill:var(--sheet)"/>` + ln(M + 19, -14, L, -14) + ln(M + 19, 10, L, 10) },
+  pulsador: { n: "Pulsador (normalmente abierto)", g: "mando", d: () => leads(M - 16, M + 16) + `<circle class="fillink" cx="${M - 16}" cy="0" r="3"/><circle class="fillink" cx="${M + 16}" cy="0" r="3"/>` + ln(M - 16, -8, M + 16, -8) + ln(M, -8, M, -20) + ln(M - 6, -20, M + 6, -20) },
+  bobina_rele: { n: "Bobina de relé", g: "mando", d: () => leads(M - 14, M + 14) + `<rect class="s" x="${M - 14}" y="-10" width="28" height="20" style="fill:var(--sheet)"/>` + ln(M - 14, 10, M + 14, -10) },
+  contacto_rele: { n: "Contacto de relé (NA)", g: "mando", d: () => leads(M - 16, M + 16) + `<circle class="fillink" cx="${M - 16}" cy="0" r="3"/><circle class="fillink" cx="${M + 16}" cy="0" r="3"/>` + ln(M - 16, 0, M + 14, -14) + `<line class="s" x1="${M}" y1="-8" x2="${M}" y2="-24" style="stroke-dasharray:3 3"/>` },
+  lampara: { n: "Lámpara", g: "receptor", d: () => leads(M - 15, M + 15) + `<circle class="s lampbody" cx="${M}" cy="0" r="15" style="fill:var(--sheet)"/>` + ln(M - 10.6, -10.6, M + 10.6, 10.6) + ln(M - 10.6, 10.6, M + 10.6, -10.6) },
+  motor: { n: "Motor", g: "receptor", d: () => leads(M - 15, M + 15) + `<circle class="s" cx="${M}" cy="0" r="15" style="fill:var(--sheet)"/><g class="rotor"><text class="txt" x="${M}" y="5" text-anchor="middle" style="font-size:15px">M</text></g>` },
+  generador: { n: "Generador", g: "fuente", d: () => circleSym("G") },
+  amperimetro: { n: "Amperímetro", g: "medida", d: () => circleSym("A") },
+  voltimetro: { n: "Voltímetro", g: "medida", d: () => circleSym("V") },
+  /* símbolos de un solo terminal o con forma propia (solo en «¿Qué símbolo es?») */
+  masa: { n: "Masa (estructura)", g: "conexion", solo: true, d: () => ln(M, -24, M, 4) + ln(M - 18, 4, M + 18, 4) + ln(M - 11, 11, M + 11, 11) + ln(M - 5, 18, M + 5, 18) },
+  union: { n: "Cruce con conexión (unión)", g: "conexion", solo: true, d: () => ln(M - 34, 0, M + 34, 0) + ln(M, -26, M, 26) + `<circle class="dot" cx="${M}" cy="0" r="5"/>` },
+  cruce: { n: "Cruce sin conexión", g: "conexion", solo: true, d: () => ln(M - 34, 0, M + 34, 0) + ln(M, -26, M, 26) },
+  antena: { n: "Antena", g: "conexion", solo: true, d: () => ln(M, 26, M, -6) + ln(M, -6, M - 16, -26) + ln(M, -6, M + 16, -26) + ln(M, -6, M, -26) },
+  transformador: { n: "Transformador", g: "pasivo", solo: true, d: () => `<path class="s" d="M${M - 14} -24 a6 6 0 0 1 0 12 a6 6 0 0 1 0 12 a6 6 0 0 1 0 12 a6 6 0 0 1 0 12"/><path class="s" d="M${M + 14} -24 a6 6 0 0 0 0 12 a6 6 0 0 0 0 12 a6 6 0 0 0 0 12 a6 6 0 0 0 0 12"/>` + ln(M - 2, -26, M - 2, 26) + ln(M + 2, -26, M + 2, 26) + ln(M - 34, -24, M - 14, -24) + ln(M - 34, 24, M - 14, 24) + ln(M + 14, -24, M + 34, -24) + ln(M + 14, 24, M + 34, 24) },
+  bocina: { n: "Bocina o altavoz", g: "receptor", solo: true, d: () => `<rect class="s" x="${M - 16}" y="-9" width="10" height="18"/><path class="s" d="M${M - 6} -9 L${M + 12} -22 L${M + 12} 22 L${M - 6} 9"/>` + ln(M - 34, -4, M - 16, -4) + ln(M - 34, 4, M - 16, 4) },
+  conector: { n: "Conector (clavija y base)", g: "conexion", solo: true, d: () => ln(M - 34, 0, M - 10, 0) + `<path class="s" d="M${M - 10} -10 L${M - 2} 0 L${M - 10} 10"/>` + `<path class="s" d="M${M + 2} -10 L${M + 10} 0 L${M + 2} 10"/>` + ln(M + 10, 0, M + 34, 0) },
+};
+const svgFrag = (type) => SYM[type].d();
+function symbolSvg(type, vb = "-6 -34 92 68") { return `<svg viewBox="${vb}" xmlns="${NS}" class="sch" aria-hidden="true">${svgFrag(type)}</svg>`; }
+
+/* Coloca un símbolo entre dos puntos (horizontal o vertical, longitud 80) */
+function place(type, x1, y1, x2, y2, extraClass = "", id = "") {
+  const ang = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+  return `<g ${id ? `id="${id}"` : ""} class="${extraClass}" transform="translate(${x1} ${y1}) rotate(${ang})">${svgFrag(type)}</g>`;
+}
+const poly = (pts, cls = "w", id = "") => `<polyline ${id ? `id="${id}"` : ""} class="${cls}" points="${pts.map(p => p.join(",")).join(" ")}"/>`;
+const ground = (x, y) => `<g transform="translate(${x - M} ${y + 24})">${SYM.masa.d()}</g>`;
+const jdot = (x, y) => `<circle class="dot" cx="${x}" cy="${y}" r="4.5"/>`;
+const text = (x, y, t, cls = "lbl", anchor = "start") => `<text class="${cls}" x="${x}" y="${y}" text-anchor="${anchor}">${t}</text>`;
+
+/* ---------- Pestañas ---------- */
+let stopCurrent = () => {};
+const modes = { simbolos: modoSimbolos, montar: modoMontar, averia: modoAveria, leer: modoLeer };
+document.querySelectorAll(".modes button").forEach(b => b.addEventListener("click", () => select(b.dataset.mode)));
+function select(m) {
+  stopCurrent(); stopCurrent = () => {};
+  document.querySelectorAll(".modes button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.mode === m)));
+  try { localStorage.setItem("banco-esquemas-tab", m); } catch (e) {}
+  modes[m]();
+}
+
+/* ==========================================================
+   1. ¿QUÉ SÍMBOLO ES?
+   ========================================================== */
+function modoSimbolos() {
+  const RONDAS = 12, TIEMPO = 12;
+  const pool = shuffle(Object.keys(SYM)).slice(0, RONDAS);
+  let i = 0, pts = 0, racha = 0, aciertos = 0, t0 = 0, raf = 0, locked = false;
+  const app = $("#app");
+  app.innerHTML = `<div class="stage"><section class="board"><span class="tag">SÍMBOLO</span>
+      <div class="quiz"><div class="symbox" id="symbox"></div><div class="opts" id="opts"></div></div>
+      <div style="margin-top:12px" class="timer" aria-hidden="true"><i id="bar"></i></div>
+      <p class="feedback" id="fb" aria-live="polite"></p></section>
+    <aside class="side"><div class="card"><h3>Marcador</h3>
+      <div class="score"><div><small>Puntos</small><span id="pts">0</span></div><div><small>Ronda</small><span id="ron">1/${RONDAS}</span></div><div><small>Racha</small><span id="rac">0</span></div></div></div>
+      <div class="card"><h2>Cómo se juega</h2><p>Elige qué representa cada símbolo antes de que se acabe la barra. Cuanto antes contestes, más puntos; cada acierto seguido suma un extra.</p>
+      <p style="color:var(--muted);font-size:.9rem">Son los símbolos que vas a leer en el WDM y en los esquemas de la UD2: fuentes, protección, mando, receptores, medida y conexión.</p></div></aside></div>`;
+  function ronda() {
+    locked = false;
+    const t = pool[i], g = SYM[t].g;
+    const mismos = shuffle(Object.keys(SYM).filter(k => k !== t && SYM[k].g === g));
+    const otros = shuffle(Object.keys(SYM).filter(k => k !== t && SYM[k].g !== g));
+    const opts = shuffle([t, ...mismos.slice(0, 2), ...otros].slice(0, 4));
+    $("#symbox").innerHTML = symbolSvg(t);
+    $("#opts").innerHTML = opts.map(o => `<button class="opt" data-k="${o}">${SYM[o].n}</button>`).join("");
+    $("#opts").querySelectorAll(".opt").forEach(b => b.addEventListener("click", () => responder(b.dataset.k)));
+    $("#fb").textContent = ""; $("#fb").className = "feedback";
+    $("#ron").textContent = `${i + 1}/${RONDAS}`;
+    t0 = performance.now(); tick();
+  }
+  function tick() {
+    const f = Math.max(0, 1 - (performance.now() - t0) / (TIEMPO * 1000));
+    $("#bar").style.transform = `scaleX(${f})`;
+    if (f <= 0) { responder(null); return; }
+    raf = requestAnimationFrame(tick);
+  }
+  function responder(k) {
+    if (locked) return; locked = true; cancelAnimationFrame(raf);
+    const t = pool[i], ok = k === t;
+    $("#opts").querySelectorAll(".opt").forEach(b => { if (b.dataset.k === t) b.classList.add("right"); else if (b.dataset.k === k) b.classList.add("wrong"); b.disabled = true; });
+    if (ok) {
+      const rest = Math.max(0, TIEMPO - (performance.now() - t0) / 1000);
+      racha++; aciertos++; const gan = 50 + Math.round(rest * 5) + (racha - 1) * 10; pts += gan;
+      $("#fb").textContent = `Correcto: ${SYM[t].n}. +${gan} puntos.`; $("#fb").className = "feedback ok";
+    } else {
+      racha = 0; $("#fb").textContent = k === null ? `Se acabó el tiempo. Era: ${SYM[t].n}.` : `No. Es: ${SYM[t].n}.`; $("#fb").className = "feedback ko";
+    }
+    $("#pts").textContent = pts; $("#rac").textContent = racha;
+    setTimeout(() => { i++; if (i < RONDAS) ronda(); else fin(); }, ok ? 900 : 1700);
+  }
+  function fin() {
+    saveBest("simbolos", pts);
+    $(".board").innerHTML = `<span class="tag">RESULTADO</span><div class="end"><strong>${pts}</strong><p>${aciertos} de ${RONDAS} símbolos acertados.</p>
+      <div class="row" style="justify-content:center"><button class="btn primary" id="again">Jugar otra vez</button></div></div>`;
+    $("#again").addEventListener("click", modoSimbolos);
+  }
+  stopCurrent = () => cancelAnimationFrame(raf);
+  ronda();
+}
+
+/* ==========================================================
+   2. MONTA EL CIRCUITO
+   ========================================================== */
+const NIVELES = [
+  { titulo: "Luz de lectura del asiento", orden: "Alimenta una lámpara de lectura desde la barra de 28 V. Debe estar protegida y el pasajero la enciende y la apaga.",
+    palette: ["disyuntor", "fusible", "interruptor", "lampara", "diodo", "condensador", "motor", "resistencia"],
+    draw: () => place("bateria", 60, 160, 60, 240) + poly([[60, 160], [60, 70], [140, 70]]) + poly([[220, 70], [300, 70]]) + poly([[380, 70], [480, 70], [480, 130]]) + poly([[480, 210], [480, 300], [60, 300], [60, 240]]) + ground(270, 300)
+      + text(24, 205, "28 V") + text(140, 50, "PROTECCIÓN") + text(300, 50, "MANDO") + text(500, 175, "RECEPTOR"),
+    slots: [{ id: "a", x1: 140, y1: 70, x2: 220, y2: 70, ok: ["disyuntor", "fusible"], why: "La protección (disyuntor o fusible) va justo después de la barra." },
+            { id: "b", x1: 300, y1: 70, x2: 380, y2: 70, ok: ["interruptor"], why: "Para encender y apagar hace falta un interruptor (el pulsador volvería a abrir al soltarlo)." },
+            { id: "c", x1: 480, y1: 130, x2: 480, y2: 210, ok: ["lampara"], why: "El receptor es la lámpara." }],
+    live: [[60, 160, 60, 70, 140, 70], [480, 210, 480, 300, 60, 300, 60, 240]], fin: "Circuito básico: generador, protección, mando, receptor y retorno por la masa (estructura)." },
+  { titulo: "Luces de navegación", orden: "Las dos luces de navegación (roja y verde) se encienden con el mismo interruptor. Si se funde una, la otra debe seguir encendida.",
+    palette: ["disyuntor", "fusible", "interruptor", "pulsador", "lampara", "resistencia", "condensador", "diodo"],
+    draw: () => place("bateria", 50, 160, 50, 240) + poly([[50, 160], [50, 70], [110, 70]]) + poly([[190, 70], [250, 70]]) + poly([[330, 70], [560, 70], [560, 130]]) + poly([[420, 70], [420, 130]]) + jdot(420, 70)
+      + poly([[420, 210], [420, 300]]) + poly([[560, 210], [560, 300], [50, 300], [50, 240]]) + jdot(420, 300) + ground(240, 300)
+      + text(14, 205, "28 V") + text(110, 50, "PROTECCIÓN") + text(250, 50, "MANDO") + text(380, 175, "NAV R") + text(578, 175, "NAV V"),
+    slots: [{ id: "a", x1: 110, y1: 70, x2: 190, y2: 70, ok: ["disyuntor", "fusible"], why: "Primero la protección." },
+            { id: "b", x1: 250, y1: 70, x2: 330, y2: 70, ok: ["interruptor"], why: "Un solo interruptor manda las dos ramas porque está antes de la derivación." },
+            { id: "c", x1: 420, y1: 130, x2: 420, y2: 210, ok: ["lampara"], why: "Cada rama lleva su lámpara." },
+            { id: "d", x1: 560, y1: 130, x2: 560, y2: 210, ok: ["lampara"], why: "Cada rama lleva su lámpara." }],
+    live: [[50, 160, 50, 70, 110, 70], [560, 210, 560, 300, 50, 300, 50, 240]], fin: "En paralelo cada lámpara recibe los 28 V y funciona aunque la otra se funda." },
+  { titulo: "Bomba de combustible con relé", orden: "El interruptor de cabina (circuito de mando, poca corriente) debe activar un relé que da la corriente fuerte al motor de la bomba (circuito de potencia).",
+    palette: ["interruptor", "bobina_rele", "contacto_rele", "motor", "lampara", "resistencia", "fusible", "diodo"],
+    draw: () => place("bateria", 50, 150, 50, 230) + poly([[50, 150], [50, 50], [600, 50]]) + poly([[50, 230], [50, 320], [600, 320]]) + ground(330, 320)
+      + place("disyuntor", 200, 50, 200, 130) + place("disyuntor", 440, 50, 440, 130) + jdot(200, 50) + jdot(440, 50) + jdot(200, 320) + jdot(440, 320)
+      + poly([[200, 290], [200, 320]]) + poly([[440, 290], [440, 320]])
+      + `<polyline points="214,250 320,250 320,170 426,170" style="stroke:var(--muted);stroke-width:2;stroke-dasharray:5 5;fill:none"/>`
+      + text(14, 195, "28 V") + text(216, 95, "CB1 5 A") + text(456, 95, "CB2 15 A") + text(232, 34, "MANDO") + text(472, 34, "POTENCIA"),
+    slots: [{ id: "a", x1: 200, y1: 130, x2: 200, y2: 210, ok: ["interruptor"], why: "En el circuito de mando, el interruptor de cabina." },
+            { id: "b", x1: 200, y1: 210, x2: 200, y2: 290, ok: ["bobina_rele"], why: "El interruptor excita la bobina del relé." },
+            { id: "c", x1: 440, y1: 130, x2: 440, y2: 210, ok: ["contacto_rele"], why: "La bobina cierra el contacto, que está en el circuito de potencia." },
+            { id: "d", x1: 440, y1: 210, x2: 440, y2: 290, ok: ["motor"], why: "El receptor de potencia es el motor de la bomba." }],
+    live: [[50, 150, 50, 50, 600, 50], [50, 230, 50, 320, 600, 320]], fin: "Con poca corriente en el mando (CB1 de 5 A) se gobierna mucha corriente en la potencia (CB2 de 15 A)." },
+  { titulo: "Medir una lámpara de cabina", orden: "Coloca el amperímetro para medir la corriente de la lámpara y el voltímetro para medir su tensión.",
+    palette: ["amperimetro", "voltimetro", "lampara", "resistencia", "interruptor", "fusible"],
+    draw: (lit) => place("bateria", 60, 160, 60, 240) + poly([[60, 160], [60, 80], [140, 80]]) + place("disyuntor", 140, 80, 220, 80) + poly([[220, 80], [300, 80]]) + poly([[380, 80], [470, 80], [470, 140]])
+      + place("lampara", 470, 140, 470, 220, lit ? "lit" : "") + poly([[470, 220], [470, 300], [60, 300], [60, 240]]) + ground(260, 300)
+      + poly([[470, 110], [580, 110], [580, 140]]) + poly([[580, 220], [580, 250], [470, 250]]) + jdot(470, 110) + jdot(470, 250)
+      + text(24, 205, "28 V") + text(150, 60, "CB 5 A") + text(410, 185, "L1"),
+    slots: [{ id: "a", x1: 300, y1: 80, x2: 380, y2: 80, ok: ["amperimetro"], why: "El amperímetro va en serie: toda la corriente de la lámpara pasa por él." },
+            { id: "b", x1: 580, y1: 140, x2: 580, y2: 220, ok: ["voltimetro"], why: "El voltímetro va en paralelo con la lámpara, entre sus dos bornes." }],
+    live: [[60, 160, 60, 80, 140, 80], [470, 220, 470, 300, 60, 300, 60, 240]], fin: "Amperímetro en serie (resistencia interna muy baja) y voltímetro en paralelo (resistencia interna muy alta)." },
+];
+let nivelMontar = 0, puntosMontar = 0;
+function modoMontar() {
+  const N = NIVELES[nivelMontar];
+  const puestos = {}; let sel = N.slots[0].id, intentos = 0, hecho = false;
+  const app = $("#app");
+  app.innerHTML = `<div class="stage"><section class="board"><span class="tag">ORDEN DE TRABAJO ${nivelMontar + 1}/${NIVELES.length}</span>
+      <svg class="sch" id="sch" viewBox="0 0 640 372" role="img" aria-label="Esquema por completar"></svg>
+      <p class="feedback" id="fb" aria-live="polite">Pulsa un hueco del esquema y elige la pieza.</p></section>
+    <aside class="side"><div class="card"><h2>${N.titulo}</h2><p>${N.orden}</p></div>
+      <div class="card"><h3>Almacén de piezas</h3><div class="palette" id="pal"></div></div>
+      <div class="card"><div class="row"><button class="btn primary" id="check">Comprobar</button><button class="btn" id="reset">Vaciar</button><button class="btn" id="next" hidden>Siguiente orden</button></div>
+      <div class="score"><div><small>Puntos</small><span id="pts">${puntosMontar}</span></div><div><small>Intentos</small><span id="int">0</span></div></div></div></aside></div>`;
+  function draw(lit = false) {
+    let s = N.draw(lit);
+    if (lit) s += N.live.map(p => { const pts = []; for (let k = 0; k < p.length; k += 2) pts.push([p[k], p[k + 1]]); return poly(pts, "w live"); }).join("");
+    N.slots.forEach(sl => {
+      const vertical = sl.x1 === sl.x2;
+      const bx = vertical ? sl.x1 - 30 : sl.x1, by = vertical ? sl.y1 : sl.y1 - 30, bw = vertical ? 60 : 80, bh = vertical ? 80 : 60;
+      const t = puestos[sl.id];
+      const cls = ["slot", sel === sl.id && !hecho ? "sel" : "", sl.state || ""].join(" ");
+      const load = t && lit ? (t === "lampara" ? "lit" : t === "motor" ? "spin" : "") : "";
+      s += `<g class="${cls}" tabindex="0" role="button" aria-label="Hueco ${sl.id.toUpperCase()}${t ? ": " + SYM[t].n : " vacío"}" data-slot="${sl.id}">
+              <rect class="box" x="${bx}" y="${by}" width="${bw}" height="${bh}"/>${t ? place(t, sl.x1, sl.y1, sl.x2, sl.y2, load) : `<text class="big" x="${bx + bw / 2}" y="${by + bh / 2 + 5}" text-anchor="middle">?</text>`}</g>`;
+    });
+    $("#sch").innerHTML = s;
+    $("#sch").querySelectorAll(".slot").forEach(g => {
+      const go = () => { if (hecho) return; sel = g.dataset.slot; draw(); };
+      g.addEventListener("click", go); g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    });
+  }
+  function palette() {
+    $("#pal").innerHTML = N.palette.map((t, k) => `<button class="part" data-t="${t}" data-k="${k}">${symbolSvg(t, "-4 -30 88 60")}<span>${SYM[t].n}</span></button>`).join("");
+    $("#pal").querySelectorAll(".part").forEach(b => b.addEventListener("click", () => {
+      if (hecho || !sel) return; puestos[sel] = b.dataset.t; N.slots.forEach(s => delete s.state);
+      const libre = N.slots.find(s => !puestos[s.id]); sel = libre ? libre.id : sel; draw();
+    }));
+  }
+  $("#check").addEventListener("click", () => {
+    if (N.slots.some(s => !puestos[s.id])) { $("#fb").textContent = "Faltan huecos por completar."; $("#fb").className = "feedback ko"; return; }
+    intentos++; $("#int").textContent = intentos;
+    const mal = N.slots.filter(s => !s.ok.includes(puestos[s.id]));
+    N.slots.forEach(s => s.state = s.ok.includes(puestos[s.id]) ? "good" : "badslot");
+    if (!mal.length) {
+      hecho = true; const gan = Math.max(40, 120 - (intentos - 1) * 30); puntosMontar += gan; $("#pts").textContent = puntosMontar;
+      draw(true); $("#fb").innerHTML = `<strong>¡Funciona!</strong> +${gan} puntos. ${N.fin}`; $("#fb").className = "feedback ok";
+      $("#check").hidden = true; $("#reset").hidden = true;
+      const nx = $("#next"); nx.hidden = false;
+      if (nivelMontar === NIVELES.length - 1) { nx.textContent = "Volver a empezar"; saveBest("montar", puntosMontar); }
+      nx.addEventListener("click", () => { if (nivelMontar === NIVELES.length - 1) { nivelMontar = 0; puntosMontar = 0; } else nivelMontar++; N.slots.forEach(s => delete s.state); modoMontar(); });
+    } else {
+      draw(); $("#fb").innerHTML = "No funciona todavía. " + mal.map(s => `Hueco en rojo: ${s.why}`).join(" "); $("#fb").className = "feedback ko";
+    }
+  });
+  $("#reset").addEventListener("click", () => { Object.keys(puestos).forEach(k => delete puestos[k]); N.slots.forEach(s => delete s.state); sel = N.slots[0].id; draw(); });
+  N.slots.forEach(s => delete s.state);
+  palette(); draw();
+}
+
+/* ==========================================================
+   3. ENCUENTRA LA AVERÍA (análisis nodal real)
+   ========================================================== */
+const RL = 28 * 28 / 10; // lámpara de 28 V y 10 W: 78,4 Ω
+const LAMPX = [390, 490, 590], LN = ["L1", "L2", "L3"];
+function circuitoAveria(f) {
+  // nodos: P (+28 V), N1, N2, T0..T2 (bornes superiores), B0..B2 (inferiores), NG (retorno), G (masa, 0 V)
+  const R = 0.02, E = [];
+  E.push(["P", "N1", f.t === "cb" ? null : R, "CB1"]);
+  E.push(["N1", "N2", f.t === "sw" ? null : R, "S1"]);
+  for (let k = 0; k < 3; k++) {
+    E.push(["N2", "T" + k, f.t === "feed" && f.k === k ? null : R, "cable a " + LN[k]]);
+    E.push(["T" + k, "B" + k, f.t === "fil" && f.k === k ? null : RL, LN[k]]);
+    E.push(["B" + k, "NG", R, "retorno de " + LN[k]]);
+  }
+  E.push(["NG", "G", f.t === "gnd" ? null : R, "retorno a masa"]);
+  return E.filter(e => e[2] !== null);
+}
+function resolver(edges) {
+  const fixed = { P: 28, G: 0 };
+  const nodes = [...new Set(edges.flatMap(e => [e[0], e[1]]))];
+  // nodos conectados a algún nodo fijo
+  const adj = {}; nodes.forEach(n => adj[n] = []); edges.forEach(([a, b]) => { adj[a].push(b); adj[b].push(a); });
+  const seen = new Set(), stack = Object.keys(fixed).filter(n => adj[n]);
+  stack.forEach(n => seen.add(n));
+  while (stack.length) { const n = stack.pop(); adj[n].forEach(m => { if (!seen.has(m)) { seen.add(m); stack.push(m); } }); }
+  const unk = nodes.filter(n => !(n in fixed) && seen.has(n)); const idx = {}; unk.forEach((n, i) => idx[n] = i);
+  const n = unk.length, A = Array.from({ length: n }, () => new Array(n + 1).fill(0));
+  edges.forEach(([a, b, r]) => {
+    const g = 1 / r;
+    [[a, b], [b, a]].forEach(([p, q]) => {
+      if (!(p in idx)) return; const i = idx[p]; A[i][i] += g;
+      if (q in idx) A[i][idx[q]] -= g; else if (q in fixed) A[i][n] += g * fixed[q];
+    });
+  });
+  for (let c = 0; c < n; c++) { let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r; [A[c], A[p]] = [A[p], A[c]];
+    if (Math.abs(A[c][c]) < 1e-12) continue; for (let r = 0; r < n; r++) { if (r === c) continue; const f = A[r][c] / A[c][c]; for (let k = c; k <= n; k++) A[r][k] -= f * A[c][k]; } }
+  const V = { ...fixed }; unk.forEach((nd, i) => V[nd] = Math.abs(A[i][i]) < 1e-12 ? 0 : A[i][n] / A[i][i]);
+  nodes.forEach(nd => { if (!(nd in V)) V[nd] = 0; }); // nodo flotante: el voltímetro marca 0 V
+  return V;
+}
+const AVERIAS = [
+  { t: "cb", txt: "Disyuntor CB1 saltado o abierto" }, { t: "sw", txt: "Interruptor S1 averiado (no cierra)" },
+  { t: "feed", k: 0, txt: "Cable cortado entre la derivación y L1" }, { t: "feed", k: 1, txt: "Cable cortado entre la derivación y L2" }, { t: "feed", k: 2, txt: "Cable cortado entre la derivación y L3" },
+  { t: "fil", k: 0, txt: "Filamento de L1 fundido" }, { t: "fil", k: 1, txt: "Filamento de L2 fundido" }, { t: "fil", k: 2, txt: "Filamento de L3 fundido" },
+  { t: "gnd", txt: "Retorno a masa cortado (cable de la derivación de masa)" },
+];
+const TPS = [
+  { id: "TP1", node: "P", x: 90, y: 70 }, { id: "TP2", node: "N1", x: 210, y: 70 }, { id: "TP3", node: "N2", x: 330, y: 70 },
+  ...LAMPX.flatMap((x, k) => [{ id: "TP" + (4 + k * 2), node: "T" + k, x: x + 18, y: 128 }, { id: "TP" + (5 + k * 2), node: "B" + k, x: x + 18, y: 182 }]),
+  { id: "TP10", node: "NG", x: 368, y: 284 },
+];
+let puntosAveria = 0, rondaAveria = 0;
+function modoAveria() {
+  const fault = AVERIAS[Math.floor(Math.random() * AVERIAS.length)];
+  const V = resolver(circuitoAveria(fault));
+  const lit = [0, 1, 2].map(k => !(fault.t === "fil" && fault.k === k) && ((V["T" + k] || 0) - (V["B" + k] || 0)) / RL > 0.1);
+  const encendidas = LN.filter((_, k) => lit[k]), apagadas = LN.filter((_, k) => !lit[k]);
+  const sintoma = !encendidas.length ? "Con S1 cerrado no se enciende ninguna de las tres lámparas." : `Con S1 cerrado, ${apagadas.join(" y ")} no se enciende; ${encendidas.join(" y ")} sí.`;
+  let medidas = 0, fallos = 0, terminado = false;
+  rondaAveria++;
+  const app = $("#app");
+  app.innerHTML = `<div class="stage"><section class="board"><span class="tag">AVERÍA ${rondaAveria}</span>
+      <svg class="sch" id="sch" viewBox="0 0 640 360" role="img" aria-label="Circuito de alumbrado con puntos de prueba"></svg>
+      <p class="feedback" id="fb" aria-live="polite">Pulsa un punto de prueba (TP) para medir su tensión respecto a masa.</p></section>
+    <aside class="side"><div class="card"><h2>Alumbrado de cabina</h2><p><strong>Parte técnico:</strong> ${sintoma}</p>
+      <p style="color:var(--muted);font-size:.9rem">Barra de 28 V CC, tres lámparas de 28 V y 10 W en paralelo. El polímetro está en tensión continua, con la punta negra en la masa del avión.</p></div>
+      <div class="meter" aria-live="polite"><small id="mlab">VOLTÍMETRO · CC</small><span id="mval">— — —</span></div>
+      <div class="card"><h3>Medidas</h3><ol class="log" id="log"></ol></div>
+      <div class="card"><h3>¿Cuál es la avería?</h3><div class="choices" id="dx"></div>
+      <div class="score"><div><small>Puntos</small><span id="pts">${puntosAveria}</span></div><div><small>Medidas</small><span id="med">0</span></div></div></div></aside></div>`;
+  let s = place("bateria", 50, 160, 50, 240) + poly([[50, 160], [50, 70], [110, 70]]) + place("disyuntor", 110, 70, 190, 70) + poly([[190, 70], [230, 70]])
+    + place("interruptor", 230, 70, 310, 70) + poly([[310, 70], [590, 70]]) + jdot(390, 70) + jdot(490, 70)
+    + poly([[50, 240], [50, 300]]) + ground(50, 300) + poly([[390, 270], [590, 270]]) + poly([[350, 270], [390, 270]]) + jdot(390, 270) + jdot(490, 270)
+    + poly([[350, 270], [350, 300]]) + ground(350, 300)
+    + text(14, 205, "28 V") + text(122, 50, "CB1 5 A") + text(250, 50, "S1") + text(400, 340, "RETORNO A MASA", "lbl");
+  LAMPX.forEach((x, k) => { s += poly([[x, 70], [x, 110]]) + `<g class="${lit[k] ? "lit" : ""}">${place("lampara", x, 110, x, 190)}</g>` + poly([[x, 190], [x, 270]]) + text(x - 34, 155, LN[k], "txt"); });
+  if (lit.some(Boolean)) s += poly([[50, 160], [50, 70], [110, 70]], "w live");
+  s += TPS.map(t => `<g class="tp" tabindex="0" role="button" aria-label="Medir en ${t.id}" data-id="${t.id}"><circle cx="${t.x}" cy="${t.y}" r="11"/><text x="${t.x}" y="${t.y + 4}" text-anchor="middle">${t.id.slice(2)}</text></g>`).join("");
+  $("#sch").innerHTML = s;
+  $("#sch").querySelectorAll(".tp").forEach(g => {
+    const go = () => {
+      if (terminado) return; const t = TPS.find(x => x.id === g.dataset.id); const v = V[t.node] || 0;
+      medidas++; g.classList.add("done"); $("#med").textContent = medidas;
+      $("#mval").textContent = `${fmt(v, 1)} V`; $("#mlab").textContent = `VOLTÍMETRO · CC · ${t.id}`;
+      $("#log").insertAdjacentHTML("afterbegin", `<li>${t.id} → ${fmt(v, 1)} V</li>`);
+    };
+    g.addEventListener("click", go); g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+  });
+  $("#dx").innerHTML = AVERIAS.map((a, k) => `<button data-k="${k}">${a.txt}</button>`).join("");
+  $("#dx").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    if (terminado) return; const a = AVERIAS[+b.dataset.k];
+    const ok = a.t === fault.t && (a.k === undefined || a.k === fault.k);
+    if (ok) {
+      terminado = true; const gan = Math.max(20, 150 - medidas * 10 - fallos * 40); puntosAveria += gan; $("#pts").textContent = puntosAveria; saveBest("averia", puntosAveria);
+      b.style.background = "var(--ok)"; b.style.color = "#fff";
+      $("#fb").innerHTML = `<strong>Diagnóstico correcto.</strong> +${gan} puntos (${medidas} medidas). ${explicacion(fault)} <button class="btn primary" id="otra" style="margin-left:6px">Otra avería</button>`;
+      $("#fb").className = "feedback ok"; $("#otra").addEventListener("click", modoAveria);
+    } else {
+      fallos++; b.style.background = "var(--bad)"; b.style.color = "#fff"; b.disabled = true;
+      $("#fb").textContent = "Ese no es el fallo: las medidas no lo confirman. Mide más puntos antes de decidir."; $("#fb").className = "feedback ko";
+    }
+  }));
+}
+function explicacion(f) {
+  return {
+    cb: "La tensión llega a TP1 (28 V) pero no pasa del disyuntor: TP2 marca 0 V.",
+    sw: "Hay 28 V antes del interruptor (TP2) y 0 V después (TP3).",
+    feed: `La derivación tiene 28 V, pero el borne superior de ${LN[f.k]} marca 0 V: el cable entre los dos está cortado.`,
+    fil: `El borne superior de ${LN[f.k]} tiene 28 V y el inferior 0 V, y no luce: el filamento está abierto.`,
+    gnd: "Sin retorno a masa no circula corriente: todos los puntos del circuito, incluso los bornes inferiores y TP10, marcan 28 V. Es la pista típica de una masa abierta.",
+  }[f.t];
+}
+
+/* ==========================================================
+   4. LEE EL ESQUEMA (luces de aterrizaje con relé)
+   ========================================================== */
+function esquemaLuces() {
+  let s = `<rect x="40" y="30" width="560" height="14" rx="3" style="fill:var(--ink)"/>` + text(48, 22, "BARRA PRINCIPAL 28 V CC", "big")
+    + place("disyuntor", 130, 44, 130, 124, "", "e-cb1") + text(146, 88, "CB1 5 A", "txt") + text(146, 104, "LDG LT CTL")
+    + place("interruptor", 130, 124, 130, 204, "", "e-s1") + text(146, 170, "S1 LDG LT", "txt")
+    + place("bobina_rele", 130, 204, 130, 284, "", "e-k1c") + text(146, 248, "K1", "txt") + poly([[130, 284], [130, 310]]) + ground(130, 310)
+    + place("disyuntor", 400, 44, 400, 124, "", "e-cb2") + text(416, 88, "CB2 25 A", "txt") + text(416, 104, "LDG LT PWR")
+    + place("contacto_rele", 400, 124, 400, 204, "", "e-k1") + text(416, 170, "K1", "txt")
+    + poly([[400, 204], [400, 230], [520, 230]], "w", "e-wpow") + jdot(400, 230) + poly([[400, 230], [400, 240]])
+    + `<g id="e-l1">${place("lampara", 400, 240, 400, 320)}</g>` + `<g id="e-l2">${place("lampara", 520, 230, 520, 310)}</g>`
+    + text(352, 286, "L1", "txt") + text(536, 276, "L2", "txt") + text(536, 292, "250 W")
+    + poly([[400, 320], [400, 340], [520, 340], [520, 310]]) + ground(460, 340)
+    + `<polyline points="144,244 260,244 260,164 386,164" style="stroke:var(--muted);stroke-width:2;stroke-dasharray:5 5;fill:none"/>`
+    + text(56, 160, "L101A20", "lbl") + text(430, 220, "L201A12", "lbl");
+  return s;
+}
+const PREGUNTAS = [
+  { q: "¿Qué disyuntor protege las dos lámparas?", o: ["CB2 (25 A)", "CB1 (5 A)", "Los dos por igual", "Ninguno: las protege el relé"], a: 0, hl: ["e-cb2"], e: "CB2 está en el circuito de potencia, que alimenta las lámparas a través del contacto de K1." },
+  { q: "Cierras S1 con CB1 saltado. ¿Qué ocurre?", o: ["La bobina de K1 no recibe tensión y las luces no se encienden", "Las luces se encienden, porque CB2 está cerrado", "Salta también CB2", "Las luces lucen a media potencia"], a: 0, hl: ["e-cb1", "e-k1c"], e: "Sin CB1 no llega tensión al mando: K1 no cierra su contacto y la potencia no llega a las lámparas." },
+  { q: "¿Para qué sirve el relé K1?", o: ["Para mandar con poca corriente (S1) un circuito de mucha corriente", "Para proteger las lámparas de una sobrecorriente", "Para que las lámparas se enciendan una detrás de otra", "Para reducir la tensión de 28 V a la de las lámparas"], a: 0, hl: ["e-k1c", "e-k1"], e: "El interruptor de cabina solo maneja la corriente de la bobina; el contacto de K1 maneja la corriente de las lámparas." },
+  { q: "Con S1 cerrado se oye el clic de K1, pero no se enciende ninguna luz. ¿Qué revisas primero?", o: ["CB2 y la alimentación del circuito de potencia", "La bobina de K1", "El interruptor S1", "CB1"], a: 0, hl: ["e-cb2", "e-k1"], e: "Si K1 conmuta, el mando funciona. El fallo está en la potencia: CB2, el contacto de K1 o el retorno común de las dos lámparas." },
+  { q: "¿Cómo están conectadas L1 y L2?", o: ["En paralelo: si se funde una, la otra sigue encendida", "En serie: si se funde una, se apagan las dos", "En serie con la bobina de K1", "En paralelo con S1"], a: 0, hl: ["e-l1", "e-l2"], e: "Las dos reciben los 28 V entre el contacto de K1 y masa." },
+  { q: "Cada lámpara es de 250 W a 28 V. ¿Qué corriente pasa por CB2 con las dos encendidas?", o: ["Unos 17,9 A", "Unos 8,9 A", "Unos 35,7 A", "Unos 500 A"], a: 0, hl: ["e-cb2"], e: "I = P / V = 250 / 28 = 8,93 A por lámpara; en paralelo se suman: 17,9 A, por debajo de los 25 A de CB2." },
+  { q: "Quieres medir solo la corriente de L1. ¿Dónde conectas el amperímetro?", o: ["En serie en la rama de L1", "En paralelo con L1", "En serie con CB2", "Entre la barra y masa"], a: 0, hl: ["e-l1"], e: "El amperímetro se intercala en serie en la rama cuya corriente quieres medir; con CB2 medirías la corriente de las dos." },
+  { q: "En el esquema, el cable de mando es L101A20 y el de potencia L201A12. ¿Cuál tiene más sección?", o: ["El de potencia (galga 12)", "El de mando (galga 20)", "Los dos igual", "No se puede saber por el código"], a: 0, hl: ["e-wpow"], e: "En la galga AWG, cuanto menor es el número, mayor es la sección. El de potencia lleva casi 18 A." },
+];
+let puntosLeer = 0;
+function modoLeer() {
+  const orden = shuffle(PREGUNTAS.map((_, i) => i)); let i = 0, aciertos = 0; puntosLeer = 0;
+  const app = $("#app");
+  app.innerHTML = `<div class="stage"><section class="board"><span class="tag">ESQUEMA · LUCES DE ATERRIZAJE</span>
+      <svg class="sch" id="sch" viewBox="0 0 640 392" role="img" aria-label="Esquema de las luces de aterrizaje con relé">${esquemaLuces()}</svg>
+      <p class="feedback" style="font-size:.85rem">CB1 y S1 forman el circuito de mando; CB2 y el contacto de K1, el de potencia. La línea discontinua une la bobina con su contacto.</p></section>
+    <aside class="side"><div class="card" id="qcard"></div>
+      <div class="card"><div class="score"><div><small>Puntos</small><span id="pts">0</span></div><div><small>Pregunta</small><span id="pn">1/${PREGUNTAS.length}</span></div></div></div></aside></div>`;
+  function marcar(ids) {
+    $("#sch").querySelectorAll(".hlbox").forEach(n => n.remove());
+    ids.forEach(id => { const el = document.getElementById(id); if (!el) return; const b = el.getBBox ? el.getBBox() : null; if (!b) return;
+      const m = el.getCTM && el.ownerSVGElement ? el.ownerSVGElement.getCTM().inverse().multiply(el.getCTM()) : null;
+      const p1 = new DOMPoint(b.x, b.y).matrixTransform(m), p2 = new DOMPoint(b.x + b.width, b.y + b.height).matrixTransform(m);
+      const r = document.createElementNS(NS, "rect"); r.setAttribute("class", "hlbox");
+      r.setAttribute("x", Math.min(p1.x, p2.x) - 8); r.setAttribute("y", Math.min(p1.y, p2.y) - 8);
+      r.setAttribute("width", Math.abs(p2.x - p1.x) + 16); r.setAttribute("height", Math.abs(p2.y - p1.y) + 16); $("#sch").appendChild(r); });
+  }
+  function pregunta() {
+    marcar([]);
+    const P = PREGUNTAS[orden[i]]; const o = shuffle(P.o.map((t, k) => ({ t, ok: k === P.a })));
+    $("#pn").textContent = `${i + 1}/${PREGUNTAS.length}`;
+    $("#qcard").innerHTML = `<span class="qnum">PREGUNTA ${i + 1}</span><h2 style="text-transform:none;font-size:1.3rem">${P.q}</h2><div class="choices">${o.map((x, k) => `<button data-ok="${x.ok}">${x.t}</button>`).join("")}</div><div id="exp"></div>`;
+    $("#qcard").querySelectorAll(".choices button").forEach(b => b.addEventListener("click", () => {
+      if ($("#qcard").dataset.done === "1") return; $("#qcard").dataset.done = "1";
+      const ok = b.dataset.ok === "true";
+      $("#qcard").querySelectorAll(".choices button").forEach(x => { if (x.dataset.ok === "true") { x.style.background = "var(--ok)"; x.style.color = "#fff"; } else if (x === b) { x.style.background = "var(--bad)"; x.style.color = "#fff"; } });
+      if (ok) { aciertos++; puntosLeer += 100; $("#pts").textContent = puntosLeer; }
+      marcar(P.hl);
+      $("#exp").innerHTML = `<p class="explain">${ok ? "<strong>Correcto.</strong> " : "<strong>No.</strong> "}${P.e}</p><button class="btn primary" id="sig" style="margin-top:8px">${i < PREGUNTAS.length - 1 ? "Siguiente" : "Ver resultado"}</button>`;
+      $("#sig").addEventListener("click", () => { i++; $("#qcard").dataset.done = "0"; if (i < PREGUNTAS.length) pregunta(); else fin(); });
+    }));
+  }
+  function fin() {
+    marcar([]); saveBest("leer", puntosLeer);
+    $("#qcard").innerHTML = `<div class="end"><strong>${puntosLeer}</strong><p>${aciertos} de ${PREGUNTAS.length} preguntas acertadas.</p><div class="row" style="justify-content:center"><button class="btn primary" id="again">Repetir</button></div></div>`;
+    $("#again").addEventListener("click", modoLeer);
+  }
+  pregunta();
+}
+
+/* ---------- Arranque ---------- */
+let first = "simbolos"; try { const t = localStorage.getItem("banco-esquemas-tab"); if (t && modes[t]) first = t; } catch (e) {}
+select(first);
+})();
+</script>
+</body>
+</html>

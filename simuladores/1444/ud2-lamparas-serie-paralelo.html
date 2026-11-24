@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Monta pilotos de 28 V en serie, en paralelo o mixto, cambia la tensión de la barra y mira la corriente y el brillo.">
+<title>Lámparas en serie, en paralelo y mixto · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .btn.averia { color: var(--red); border-color: var(--red); }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Lámparas en serie, en paralelo y mixto</h1>
+    <p class="sub">UD2 · CE c · i · j · pilotos de 28 V · 0,25 A</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena" id="escena"></div>
+    <aside class="lateral">
+      <div class="tarjeta">
+        <h2>Mandos</h2>
+        <div class="controles" id="mandos"></div>
+        <p class="nota-ref">Cada botón de lámpara pasa por normal → fundida → puenteada.</p>
+      </div>
+      <div class="panel"><h2>Medidas de cada lámpara</h2><div class="salida" id="salida"></div><span id="estado"></span></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Tres pilotos iguales de 28 V · 0,25 A (112 Ω) en la barra de 28 V CC. Elige el montaje, funde o puentea cada lámpara con su botón y observa la tensión, la corriente y el brillo de cada una (el brillo es la potencia frente a la nominal).</p>
+      <p class="nota-ref">Modelo ideal: la resistencia del filamento no cambia con la temperatura.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Pregunta para el alumnado</h2>
+      <ul>
+        <li>En serie, ¿qué pasa con las demás si se funde una? ¿Y si se puentea?</li>
+        <li>¿Por qué las luces de cabina van en paralelo?</li>
+        <li>En el mixto, ¿qué lámpara luce más?</li>
+      </ul>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  // ── CÁLCULO
+  const VN = 28.0, IN = 0.25;   // datos nominales de cada piloto
+  const RN = VN / IN;           // 112 Ω
+  const PN = VN * IN;           // 7 W
+  const DISYUNTOR = 5.0;        // A
+  const INF = Infinity;
+  const ESTADOS = ["normal", "fundida", "puenteada"];
+  const MONTAJES = ["Serie", "Paralelo", "Mixto: L1 + (L2 ‖ L3)"];
+  /** Resistencia de dos ramas en paralelo (admite 0 e infinito). */
+  function par(a, b) {
+    if (a === 0 || b === 0) return 0.0;
+    const ga = a === INF ? 0 : 1 / a, gb = b === INF ? 0 : 1 / b;
+    return ga + gb === 0 ? INF : 1 / (ga + gb);
+  }
+  const resistencias = (est) => est.map((e) => (e === 1 ? INF : e === 2 ? 0.0 : RN));
+  /** Devuelve [corriente total, [[V, I] de cada lámpara], cortocircuito]. */
+  function _resolver(montaje, v, est) {
+    const R = resistencias(est);
+    if (montaje === 0) {                                  // serie
+      const rt = R[0] + R[1] + R[2];
+      if (rt === 0) return [INF, [[0, 0], [0, 0], [0, 0]], true];
+      if (rt === INF) {
+        const abiertas = [0, 1, 2].filter((k) => R[k] === INF);
+        return [0.0, [0, 1, 2].map((k) => [abiertas.includes(k) && abiertas.length === 1 ? v : 0.0, 0.0]), false];
+      }
+      const i = v / rt;
+      return [i, R.map((r) => [i * r, i]), false];
+    }
+    if (montaje === 1) {                                  // paralelo
+      if (R.includes(0)) return [INF, [[0, 0], [0, 0], [0, 0]], true];
+      const ii = R.map((r) => (r === INF ? 0.0 : v / r));
+      return [ii[0] + ii[1] + ii[2], ii.map((x) => [v, x]), false];
+    }
+    // mixto: L1 en serie con (L2 ‖ L3)
+    const rp = par(R[1], R[2]);
+    const rt = R[0] + rp;
+    if (rt === 0) return [INF, [[0, 0], [0, 0], [0, 0]], true];
+    if (rt === INF) {
+      if (R[0] === INF) return [0.0, [[rp !== INF ? v : 0.0, 0.0], [0.0, 0.0], [0.0, 0.0]], false];
+      return [0.0, [[0.0, 0.0], [R[1] === INF ? v : 0, 0.0], [R[2] === INF ? v : 0, 0.0]], false];
+    }
+    const i = v / rt;
+    const v1 = i * R[0];
+    const vp = v - v1;
+    let i2 = R[1] === INF ? 0.0 : (R[1] === 0 ? i : vp / R[1]);
+    let i3 = R[2] === INF ? 0.0 : (R[2] === 0 ? i : vp / R[2]);
+    if (R[1] === 0 || R[2] === 0) [i2, i3] = R[1] === 0 ? [i, 0.0] : [0.0, i]; // una del paralelo puenteada: se lleva toda la corriente
+    return [i, [[v1, i], [vp, i2], [vp, i3]], false];
+  }
+  /** Como _resolver, pero una lámpara puenteada no lleva corriente (la lleva el puente). */
+  function resolver(montaje, v, est) {
+    const [it, vals, short] = _resolver(montaje, v, est);
+    return [it, vals.map((x, k) => (est[k] === 2 ? [0.0, 0.0] : x)), short];
+  }
+  /** Resistencia equivalente del montaje (no depende de la tensión de la barra). */
+  function req(montaje, est) {
+    const R = resistencias(est);
+    if (montaje === 0) return R[0] + R[1] + R[2];
+    if (montaje === 1) return par(par(R[0], R[1]), R[2]);
+    return R[0] + par(R[1], R[2]);
+  }
+  /** Líneas del panel y si hay que avisar en rojo. */
+  function medidas(m, v, est) {
+    const [it, vals, short] = resolver(m, v, est);
+    const disparo = short || it > DISYUNTOR;
+    const lineas = [`Montaje: ${MONTAJES[m]}`, `Barra: ${num(v, 1, "V")}`];
+    if (disparo) {
+      lineas.push("", "CORTOCIRCUITO: la corriente se", "dispara y SALTA el disyuntor.", "Todas las lámparas apagadas.");
+      return { lineas, rojo: true, disparo, short, vals, it, estado: ["SALTA el disyuntor de 5 A", "mal"] };
+    }
+    const rq = req(m, est);
+    lineas.push(`I total = ${num(it, 3, "A")}   ·   Req = ` + (rq === INF ? "∞ (abierto)" : num(rq, 1, "Ω")), "");
+    let aviso = false;
+    vals.forEach(([vk, ik], k) => {
+      const b = vk * ik / PN * 100;
+      lineas.push(`L${k + 1}: ${num(vk, 1, "V")} · ${num(ik, 3, "A")} · ${b < 0.5 ? "apagada" : `brillo ${num(b, 0, "%")}`}`);
+      aviso = aviso || b > 110;
+    });
+    const nDim = vals.filter(([vk, ik]) => vk * ik / PN * 100 >= 0.5 && vk * ik / PN * 100 < 60).length;
+    let estado;
+    if (aviso) estado = ["¡Una lámpara supera su potencia: se puede fundir!", "mal"];
+    else if (it === 0) estado = rq === INF ? ["Circuito abierto: no circula corriente.", "aviso"] : ["Barra sin tensión: no circula corriente.", "aviso"];
+    else if (nDim) estado = [`${nDim} lámpara(s) lucen poco (< 60 %).`, "aviso"];
+    else estado = ["Todas las que lucen están a su tensión nominal.", "ok"];
+    return { lineas, rojo: aviso, disparo, short, vals, it, estado };
+  }
+  // ── FIN CÁLCULO
+
+  let m = 0, V = 28;
+  const est = [0, 0, 0];
+  const U = 60; // píxeles lógicos por unidad del dibujo del Python (x de −0,9 a 12,1; y de 0 a 6,6)
+
+  const lienzo = new Sim.Lienzo("#escena", {
+    ancho: 780, proporcion: 6.6 / 13, etiqueta: "Esquema del circuito con las tres lámparas",
+    dibujar(ctx) {
+      const P = (x, y) => [(x + 0.9) * U, (6.6 - y) * U];
+      const hilo = (xs, ys, col = C.INK, ancho = 3) => Sim.polilinea(ctx, xs.map((x, i) => P(x, ys[i])), { color: col, ancho });
+      const t = (s, x, y, e) => Sim.texto(ctx, s, ...P(x, y), e);
+      const md = medidas(m, V, est);
+      const disparo = md.disparo;
+      // batería y disyuntor
+      hilo([1, 1], [1, 2.7]); hilo([1, 1], [3.3, 5]);
+      hilo([0.55, 1.45], [3.3, 3.3], C.INK, 4); hilo([0.75, 1.25], [2.7, 2.7], C.INK, 8);
+      t(num(V, 1, "V"), 0.35, 3.0, { tam: 22, alin: "right", base: "middle", negrita: true, color: C.NAVY });
+      t("+", 0.95, 3.75, { tam: 22, alin: "right" });
+      const cb = disparo ? C.RED : C.INK;
+      hilo([1, 1.6], [5, 5]);
+      hilo([1.6, 2.4], [5, disparo ? 5.35 : 5], cb, 3.5);
+      for (const x of [1.6, 2.4]) Sim.circulo(ctx, ...P(x, 5), 5, { relleno: cb, color: null });
+      t("Disyuntor 5 A" + (disparo ? " · ABIERTO" : ""), 2.0, 5.55, { tam: 18, alin: "center", color: cb, negrita: disparo });
+      const vv = disparo ? [[0, 0], [0, 0], [0, 0]] : md.vals;
+      let pos;
+      hilo([2.4, 9.5], [5, 5]);
+      if (m === 0) {
+        hilo([9.5, 9.5], [5, 1]); hilo([9.5, 1], [1, 1]);
+        pos = [[4.3, 5, false], [7.2, 5, false], [9.5, 3, true]];
+      } else {
+        hilo([9.5, 1], [1, 1]);
+        pos = m === 1 ? [[4.3, 3, true], [6.9, 3, true], [9.5, 3, true]] : [[4.0, 5, false], [6.9, 3, true], [9.5, 3, true]];
+        for (const [x, , vert] of pos) if (vert) hilo([x, x], [5, 1]);
+      }
+      pos.forEach(([x, y, vert], k) => {
+        ctx.fillStyle = C.WHITE;
+        const [px, py] = P(x - 0.5, y + 0.5);
+        ctx.fillRect(px, py, U, U);
+        lampara(x, y, k, vert, vv[k][0], vv[k][1], md.short || disparo);
+      });
+      t("Masa (retorno)", 5.5, 0.35, { tam: 18, alin: "center", color: C.MUTED });
+
+      function lampara(x, y, k, vert, vk, ik, corto) {
+        const b = corto ? 0 : Math.min(1.4, vk * ik / PN);
+        const e = est[k];
+        const bb = Math.min(b, 1.0);
+        if (b > 0.02) {
+          for (const [rr, a] of [[1.05, 0.10], [0.82, 0.18], [0.62, 0.30]]) {
+            ctx.save(); ctx.globalAlpha = a * bb;
+            Sim.circulo(ctx, ...P(x, y), rr * (0.6 + 0.4 * bb) * U, { relleno: C.GOLD, color: null });
+            ctx.restore();
+          }
+        }
+        Sim.circulo(ctx, ...P(x, y), 0.42 * U, { relleno: Sim.mezcla("#FFFFFF", C.GOLD, bb), color: C.INK, ancho: 3 });
+        const d = 0.3, col = e === 1 ? C.RED : C.INK;
+        hilo([x - d, x + d], [y - d, y + d], col, 3); hilo([x - d, x + d], [y + d, y - d], col, 3);
+        const [lx, ly] = vert ? [x + 0.65, y] : [x, y + 0.75];
+        const al = vert ? "left" : "center";
+        t(`L${k + 1}`, lx, ly, { tam: 24, negrita: true, alin: al, base: "middle", color: C.NAVY });
+        const ey = vert ? ly - 0.45 : ly + 0.45; // en horizontal, el aviso va encima del nombre para no tapar la lámpara
+        if (e === 1) t("FUNDIDA", lx, ey, { tam: 16, negrita: true, alin: al, base: "middle", color: C.RED });
+        if (e === 2) {
+          if (vert) hilo([x, x - 0.75, x - 0.75, x], [y + 0.9, y + 0.9, y - 0.9, y - 0.9], C.RED, 4);
+          else hilo([x - 0.9, x - 0.9, x + 0.9, x + 0.9], [y, y - 0.75, y - 0.75, y], C.RED, 4);
+          t("PUENTEADA", lx, ey, { tam: 16, negrita: true, alin: al, base: "middle", color: C.RED });
+        }
+      }
+    },
+  });
+
+  const salida = document.getElementById("salida");
+  const botones = [];
+  function actualizar() {
+    const md = medidas(m, V, est);
+    salida.textContent = md.lineas.join("\n");
+    salida.style.color = md.rojo || md.disparo ? C.RED : C.NAVY;
+    Sim.estado("#estado", md.estado[0], md.estado[1]);
+    botones.forEach((b, k) => {
+      b.textContent = `L${k + 1}: ${ESTADOS[est[k]]}`;
+      b.classList.toggle("averia", est[k] !== 0);
+    });
+    lienzo.pedir();
+  }
+
+  Sim.opciones("#mandos", { titulo: "Montaje", etiquetas: MONTAJES, activa: 0, alCambiar: (i) => { m = i; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "Barra", min: 0, max: 30, valor: V, paso: 0.5, unidad: "V", dec: 1, alCambiar: (v) => { V = v; actualizar(); } });
+  for (let k = 0; k < 3; k++) botones.push(Sim.boton("#mandos", `L${k + 1}: normal`, () => { est[k] = (est[k] + 1) % 3; actualizar(); }));
+  Sim.boton("#mandos", "Restablecer", () => { est.fill(0); actualizar(); }, { primario: true });
+  actualizar();
+})();
+</script>
+<script>/*PRUEBA*/(()=>{const h=new URLSearchParams(location.hash.slice(1));for(const a of (h.get('a')||'').split(';').filter(Boolean)){const [sel,val]=a.split('=');const el=document.querySelectorAll('input,button')[+sel];if(val!==undefined&&el.type==='range'){el.value=val;el.dispatchEvent(new Event('input'));}else el.click();}})();</script>
+</body>
+</html>

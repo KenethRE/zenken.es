@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Pon la entrada a 0 o a 1 y mira cómo el transistor NPN pasa de corte a saturación y funciona como compuerta NOT.">
+<title>El transistor NPN como interruptor · 1428</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  table.datos td.v { text-align: right; font-weight: 700; white-space: nowrap; }
+  table.datos td.n { color: var(--muted); }
+  table.verdad th, table.verdad td { text-align: center; }
+  table.verdad tr.actual td { background: #FAEEDA; font-weight: 700; }
+  .lienzo canvas { touch-action: auto; }   /* sin interacción en el lienzo: que se pueda desplazar la página */
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1428 Técnicas digitales y sistemas de instrumentos electrónicos</a></p>
+    <h1>El transistor NPN como interruptor</h1>
+    <p class="sub">UD5 · Circuitos lógicos · corte (no conduce) y saturación (conduce): la compuerta NOT</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena" id="escena"></div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Mandos</h2><div class="controles" id="mandos"></div>
+        <p class="nota-ref">Entrada 1: el transistor se satura y la salida cae a ≈ 0,2 V (0 lógico). Entrada 0: queda en corte y la salida está a 5 V (1 lógico). Es un inversor (NOT).</p>
+      </div>
+      <div class="panel"><h2>Lecturas</h2>
+        <div class="tabla-wrap"><table class="datos"><tbody id="lecturas"></tbody></table></div>
+        <span id="estado"></span>
+      </div>
+      <div class="tarjeta"><h2>Tabla de verdad de la compuerta NOT (X = Ā)</h2>
+        <div class="tabla-wrap"><table class="datos verdad">
+          <thead><tr><th>Entrada A</th><th>Transistor</th><th>Salida X</th></tr></thead>
+          <tbody><tr id="fila0"><td>0</td><td>corte (abierto)</td><td>1</td></tr><tr id="fila1"><td>1</td><td>saturado (cerrado)</td><td>0</td></tr></tbody>
+        </table></div>
+      </div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>El circuito, las corrientes I<sub>B</sub>, I<sub>C</sub> e I<sub>E</sub> como flechas, la lámpara de la carga, el interruptor equivalente entre colector y emisor y la tabla de verdad del NOT.</p>
+      <p>Como en los apuntes (pág. 4), el transistor se usa solo en sus dos extremos:</p>
+      <ul>
+        <li><b>Corte:</b> V<sub>B</sub> − V<sub>E</sub> = 0 → I<sub>B</sub> = 0 → I<sub>C</sub> = 0. El transistor no conduce: interruptor ABIERTO.</li>
+        <li><b>Saturación:</b> V<sub>B</sub> − V<sub>E</sub> elevada → I<sub>C</sub> elevada. El transistor conduce: interruptor CERRADO.</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>La compuerta NOT</h2>
+      <p>Con la carga en el colector forma la compuerta NOT (apuntes, pág. 9, figura 7):</p>
+      <ul>
+        <li>entrada A = 1 → transistor saturado → salida X = 0 (≈ 0,2 V)</li>
+        <li>entrada A = 0 → transistor en corte → salida X = 1 (+5 V)</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Cómo usarlo</h2>
+      <p>Pulsa «Entrada A = 0» o «Entrada A = 1», o «Alternar» para que cambie sola cada 1,5 s.</p>
+      <p class="nota-ref">Datos del circuito: V<sub>CC</sub> = 5 V, R<sub>C</sub> = 1 kΩ, R<sub>B</sub> = 10 kΩ, V<sub>BE</sub> = 0,7 V en conducción y V<sub>CE(sat)</sub> = 0,2 V. La flecha de I<sub>B</sub> está ampliada ×20 para que se vea. El estudio del transistor como componente (tipos, zona activa, amplificación) es del módulo 1426.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1428 · Técnicas digitales y sistemas de instrumentos electrónicos en aeromecánica · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  // ── Parámetros (transistor_interruptor.py)
+  const VCC = 5.0, VBE_ON = 0.7, VCE_SAT = 0.2, RC = 1000.0, RB = 10000.0;
+  const C_CORTE = "#5F5E5A", C_SAT = "#0F6E56", C_IB = "#D85A30", C_IC = "#185FA5", C_IE = "#534AB7";
+  const NEGRO = "#2C2C2A", GRIS = "#5A6675";
+
+  function calcular(a) {
+    const vin = a ? 5.0 : 0.0;
+    let ib, ic, estado;
+    if (a) { ib = (vin - VBE_ON) / RB; ic = (VCC - VCE_SAT) / RC; estado = "SATURACIÓN"; }
+    else { ib = 0; ic = 0; estado = "CORTE"; }
+    return { vin, ib, ic, ie: ib + ic, vce: VCC - ic * RC, vbe: a ? VBE_ON : 0.0, ic_sat: (VCC - VCE_SAT) / RC, estado };
+  }
+
+  // ── Esquema en las coordenadas del Python: x de 0 a 11,5 y y de 0,1 a 9,9 (y hacia arriba)
+  const ANCHO = 720, XMAX = 11.5, YMIN = 0.1, YMAX = 9.9;
+  const U = ANCHO / XMAX;
+  const X = (x) => x * U, Y = (y) => (YMAX - y) * U;
+  const XT = 6.0, YT = 4.9, XC = 6.6;
+
+  let a = 0;
+
+  function linea(ctx, pts, col = NEGRO, lw = 2) {
+    Sim.polilinea(ctx, pts.map(([x, y]) => [X(x), Y(y)]), { color: col, ancho: lw * 1.4 });
+  }
+  function txt(ctx, s, x, y, e = {}) { Sim.texto(ctx, s, X(x), Y(y), Object.assign({ tam: 21, color: NEGRO }, e)); }
+  function rect(ctx, x, y, w, h, relleno, borde) {
+    ctx.save(); ctx.fillStyle = relleno; ctx.strokeStyle = borde; ctx.lineWidth = 2;
+    ctx.fillRect(X(x), Y(y + h), w * U, h * U); ctx.strokeRect(X(x), Y(y + h), w * U, h * U); ctx.restore();
+  }
+  function resistorV(ctx, x, y0, y1, et) {
+    const h = (y1 - y0) * 0.55, ym = (y0 + y1) / 2;
+    linea(ctx, [[x, y1], [x, ym + h / 2]]); linea(ctx, [[x, ym - h / 2], [x, y0]]);
+    rect(ctx, x - 0.22, ym - h / 2, 0.44, h, "#FAC775", "#BA7517");
+    txt(ctx, et, x + 0.38, ym, { base: "middle" });
+  }
+  function resistorH(ctx, x0, x1, y, et) {
+    const w = (x1 - x0) * 0.5, xm = (x0 + x1) / 2;
+    linea(ctx, [[x0, y], [xm - w / 2, y]]); linea(ctx, [[xm + w / 2, y], [x1, y]]);
+    rect(ctx, xm - w / 2, y - 0.22, w, 0.44, "#FAC775", "#BA7517");
+    txt(ctx, et, xm, y + 0.45, { alin: "center" });
+  }
+  function masa(ctx, x, y) {
+    linea(ctx, [[x, y + 0.35], [x, y]]);
+    [0.45, 0.30, 0.15].forEach((w, k) => linea(ctx, [[x - w, y - k * 0.13], [x + w, y - k * 0.13]]));
+  }
+  function circ(ctx, x, y, r, relleno, borde = NEGRO, lw = 2) {
+    Sim.circulo(ctx, X(x), Y(y), r * U, { relleno, color: borde, ancho: lw });
+  }
+  function punto(ctx, x, y, r, relleno, borde) {
+    Sim.circulo(ctx, X(x), Y(y), r, { relleno, color: borde || null, ancho: 2 });
+  }
+  // Flecha de corriente con grosor proporcional a i (FancyArrow del Python)
+  function flechaI(ctx, x, y, dx, dy, i, imax, color) {
+    if (i <= 1e-9) return;
+    const w = 0.05 + 0.22 * Math.min(1, i / imax), hw = w * 2.6 + 0.12, hl = 0.28;
+    const L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
+    const xb = x + ux * (L - hl), yb = y + uy * (L - hl);
+    const p = [[x + nx * w / 2, y + ny * w / 2], [xb + nx * w / 2, yb + ny * w / 2], [xb + nx * hw / 2, yb + ny * hw / 2],
+      [x + dx, y + dy], [xb - nx * hw / 2, yb - ny * hw / 2], [xb - nx * w / 2, yb - ny * w / 2], [x - nx * w / 2, y - ny * w / 2]];
+    ctx.save(); ctx.globalAlpha = 0.9; ctx.fillStyle = color; ctx.beginPath();
+    p.forEach(([px, py], k) => (k ? ctx.lineTo(X(px), Y(py)) : ctx.moveTo(X(px), Y(py))));
+    ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+
+  const lienzo = new Sim.Lienzo("#escena", {
+    ancho: ANCHO, proporcion: (YMAX - YMIN) / XMAX,
+    etiqueta: "Esquema del transistor NPN como interruptor con su carga en el colector",
+    dibujar(ctx) {
+      const r = calcular(a);
+      const sat = r.estado === "SATURACIÓN";
+      const col = sat ? C_SAT : C_CORTE;
+      // alimentación y carga
+      linea(ctx, [[5.6, 9.4], [7.6, 9.4]], "#A32D2D", 3);
+      txt(ctx, "+5 V", 7.75, 9.4, { base: "middle", negrita: true, color: "#A32D2D", tam: 23 });
+      resistorV(ctx, XC, 7.95, 9.4, "Rc = 1 kΩ");
+      circ(ctx, XC, 7.3, 0.42, sat ? "#FFAD1A" : "#F1EFE8", "#444441");
+      linea(ctx, [[XC - 0.28, 7.02], [XC + 0.28, 7.58]], "#444441", 1.2);
+      linea(ctx, [[XC - 0.28, 7.58], [XC + 0.28, 7.02]], "#444441", 1.2);
+      txt(ctx, "carga\n(lámpara)", XC + 0.6, 7.48, { base: "middle", tam: 18, color: GRIS, interlinea: 1.1 });
+      linea(ctx, [[XC, 7.95], [XC, 7.72]]); linea(ctx, [[XC, 6.88], [XC, 5.75]]);
+      // transistor NPN
+      circ(ctx, XT, YT, 0.95, sat ? "#E1F5EE" : "#F1EFE8", NEGRO, 2.5);
+      linea(ctx, [[5.55, YT - 0.55], [5.55, YT + 0.55]], NEGRO, 4);
+      linea(ctx, [[5.55, YT + 0.28], [XC, 5.75]]);
+      linea(ctx, [[5.55, YT - 0.28], [XC, 4.05]]);
+      Sim.polilinea(ctx, [[X(XC), Y(4.05)], [X(XC - 0.36), Y(4.12)], [X(XC - 0.18), Y(4.36)]], { color: NEGRO, ancho: 1, cerrar: true, relleno: NEGRO });
+      txt(ctx, "C", XC + 0.15, 5.95, { negrita: true }); txt(ctx, "E", XC + 0.15, 3.7, { negrita: true });
+      txt(ctx, "B", 5.15, YT + 0.62, { negrita: true });
+      linea(ctx, [[XC, 4.05], [XC, 2.4]]); masa(ctx, XC, 2.05);
+      // base: entrada → Rb → base
+      linea(ctx, [[4.3, YT], [5.55, YT]]);
+      resistorH(ctx, 1.9, 4.3, YT, "Rb = 10 kΩ");
+      linea(ctx, [[1.2, 4.2], [1.2, YT]]); linea(ctx, [[1.2, YT], [1.9, YT]]); linea(ctx, [[1.2, 3.2], [1.2, 2.4]]); masa(ctx, 1.2, 2.05);
+      circ(ctx, 1.2, 3.7, 0.5, C.WHITE, NEGRO, 2.5);
+      txt(ctx, "Vin", 1.2, 3.7, { alin: "center", base: "middle", negrita: true, tam: 18 });
+      txt(ctx, "Entrada A", 0.15, 6.55, { color: GRIS, tam: 19 });
+      txt(ctx, `Vin = ${num(r.vin, 0)} V  (A = ${a})`, 0.15, 6.0, { negrita: true, color: C_IB, tam: 22 });
+      // salida
+      punto(ctx, XC, 6.3, 5, NEGRO);
+      linea(ctx, [[XC, 6.3], [8.6, 6.3]]);
+      punto(ctx, 8.6, 6.3, 7, C.WHITE, NEGRO);
+      txt(ctx, "Salida X", 8.85, 6.75, { color: GRIS, tam: 19 });
+      txt(ctx, `Vout = ${num(r.vce, 2)} V\n(X = ${1 - a})`, 8.85, 6.12, { negrita: true, color: C_IC, tam: 22 });
+      // interruptor equivalente
+      txt(ctx, "Equivalente C–E", 8.85, 4.3, { color: GRIS, tam: 18, alin: "center" });
+      linea(ctx, [[8.35, 3.25], [8.35, 3.65]]); linea(ctx, [[8.35, 2.25], [8.35, 2.65]]);
+      punto(ctx, 8.35, 3.65, 4, NEGRO); punto(ctx, 8.35, 2.65, 4, NEGRO);
+      txt(ctx, "C", 8.55, 3.65, { base: "middle", tam: 17 }); txt(ctx, "E", 8.55, 2.65, { base: "middle", tam: 17 });
+      if (sat) linea(ctx, [[8.35, 2.65], [8.35, 3.25]], NEGRO, 2.5);
+      else linea(ctx, [[8.35, 2.65], [8.85, 3.15]], NEGRO, 2.5);
+      txt(ctx, sat ? "cerrado" : "abierto", 8.85, 1.85, { alin: "center", negrita: true, color: col, tam: 19 });
+      // corrientes
+      const imax = r.ic_sat;
+      flechaI(ctx, 2.0, YT - 0.45, 1.6, 0, r.ib, imax / 20, C_IB);   // IB (escala ampliada ×20)
+      flechaI(ctx, XC - 0.85, 9.0, 0, -1.6, r.ic, imax, C_IC);       // IC
+      flechaI(ctx, XC - 0.45, 3.7, 0, -1.1, r.ie, imax, C_IE);       // IE
+      if (sat) {
+        txt(ctx, "IB", 2.8, YT - 1.05, { alin: "center", negrita: true, color: C_IB, tam: 18 });
+        txt(ctx, "IC", XC - 1.2, 8.2, { alin: "right", base: "middle", negrita: true, color: C_IC, tam: 18 });
+        txt(ctx, "IE", XC - 0.8, 3.15, { alin: "right", base: "middle", negrita: true, color: C_IE, tam: 18 });
+      }
+      // rótulo de estado
+      const et = sat ? "SATURACIÓN (conduce)" : "CORTE (no conduce)";
+      ctx.save(); ctx.font = `bold 26px ${Sim.FUENTE}`; const tw = ctx.measureText(et).width; ctx.restore();
+      Sim.caja(ctx, X(5.0) - tw / 2 - 16, Y(0.55) - 22, tw + 32, 44, { relleno: col, color: null, radio: 10 });
+      txt(ctx, et, 5.0, 0.55, { alin: "center", base: "middle", negrita: true, color: C.WHITE, tam: 26 });
+    },
+  });
+
+  const lecturas = document.getElementById("lecturas");
+  function actualizar() {
+    const r = calcular(a);
+    const filas = [
+      ["Corriente de base IB", `${num(r.ib * 1e3, 2)} mA`, C_IB],
+      ["Corriente de colector IC", `${num(r.ic * 1e3, 2)} mA`, C_IC],
+      ["Corriente de emisor IE = IB + IC", `${num(r.ie * 1e3, 2)} mA`, C_IE],
+      ["VBE / VCE", `${num(r.vbe, 2)} V / ${num(r.vce, 2)} V`, NEGRO],
+      ["Lógica: entrada A → salida X", `${a} → ${1 - a}`, C.NAVY],
+    ];
+    lecturas.innerHTML = filas.map(([t, v, c]) => `<tr><td class="n">${t}</td><td class="v" style="color:${c}">${v}</td></tr>`).join("");
+    if (r.estado === "SATURACIÓN") Sim.estado("#estado", "SATURACIÓN (conduce)", "ok");
+    else Sim.estado("#estado", "CORTE (no conduce)", "info");
+    document.getElementById("fila0").className = a === 0 ? "actual" : "";
+    document.getElementById("fila1").className = a === 1 ? "actual" : "";
+    b0.classList.toggle("primario", a === 0);
+    b1.classList.toggle("primario", a === 1);
+    lienzo.pedir();
+  }
+  function poner(v) { a = v; actualizar(); }
+
+  const b0 = Sim.boton("#mandos", "Entrada A = 0", () => poner(0));
+  const b1 = Sim.boton("#mandos", "Entrada A = 1", () => poner(1));
+  let reloj = null;
+  const bAnim = Sim.boton("#mandos", "Alternar", () => {
+    if (reloj === null) { reloj = setInterval(() => poner(1 - a), 1500); bAnim.textContent = "Parar"; }
+    else { clearInterval(reloj); reloj = null; bAnim.textContent = "Alternar"; }
+  });
+  actualizar();
+})();
+</script>
+</body>
+</html>

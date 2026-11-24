@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Mira cómo viajan las palabras de 32 bits de una fuente a tres receptores, mete ruido y comprueba la paridad.">
+<title>Así funciona un bus ARINC 429 · 1428</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .fig { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; min-width: 0; display: grid; gap: 8px; }
+  .fig > h2 { margin: 0; font-family: var(--serif); font-size: 1.05rem; color: var(--navy); }
+  .fig .lienzo { border: 0; border-radius: 0; }
+  .fig .nota-ref { margin: 0; }
+  @media (max-width: 520px) { .fig { padding: 10px 8px; } }
+  .aviso-rojo { margin: 0; background: #FCEBEB; border: 1px solid #A32D2D; color: #A32D2D; font-weight: 700; border-radius: 8px; padding: 8px 12px; }
+  .info p { margin: 0 0 4px; }
+  .info .etq { font-size: 1.45rem; font-weight: 700; color: #C4821E; margin-bottom: 2px; }
+  .info .gris { color: var(--muted); font-size: .92rem; }
+  .info .fuerte { color: var(--navy); font-weight: 700; }
+  .info .rojo { color: #A32D2D; font-weight: 700; }
+  .info .sep { margin-top: 10px; }
+  .btn.ruido { background: #FCEBEB; border-color: #E9B9B9; }
+  .btn.resp { background: #FAEEDA; border-color: #E8C58C; }
+  .btn.ancho { flex: 1 1 100%; }
+  @media (max-width: 900px) {
+    .sim > .escena, .sim > .lateral { display: contents; }
+    #f-bus { order: 1; } #f-senal { order: 2; } #t-mandos { order: 3; } #t-info { order: 4; }
+  }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1428 Técnicas digitales y sistemas de instrumentos electrónicos</a></p>
+    <h1>Así funciona un bus ARINC 429</h1>
+    <p class="sub">UD4 · Buses de datos · una fuente, hasta 20 receptores, un solo sentido, palabras de 32 bits en bipolar RZ (apuntes, págs. 4-5 y 8-12)</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div class="fig" id="f-bus">
+        <div class="lienzo" id="bus"></div>
+        <p class="nota-ref" id="cap-estrecho" hidden>Par de cables trenzados y apantallados (pantalla a masa en los dos extremos). Un solo sentido: de la fuente a los receptores (bus unidireccional, lazo abierto).</p>
+        <p class="aviso-rojo" id="aviso-resp" hidden>NO SE PUEDE: el bus ARINC 429 es unidireccional y tiene una sola fuente. La información nunca puede llegar a un puerto transmisor. Para que LRU Y envíe datos a LRU X hace falta OTRO bus independiente, en el que LRU Y sea la fuente.</p>
+      </div>
+      <div class="fig" id="f-senal">
+        <h2 id="tit-senal"></h2>
+        <div class="lienzo" id="senal"></div>
+      </div>
+    </div>
+    <aside class="lateral">
+      <div class="panel info" id="t-info"><h2>Palabra que se está transmitiendo</h2><div id="info"></div></div>
+      <div class="tarjeta" id="t-mandos"><h2>Mandos</h2><div class="controles" id="mandos"></div>
+        <p class="nota-ref">Etiquetas, escalas y valores: ejemplos para la clase. Todos los receptores reciben todas las palabras; cada uno solo decodifica las etiquetas que necesita.</p>
+      </div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué se ve</h2>
+      <ul>
+        <li>Una sola fuente (LRU X) transmite por un par de cables trenzados y apantallados hacia varios receptores (hasta 20 por fuente). El bus es unidireccional: los receptores no pueden contestar por él (lazo abierto).</li>
+        <li>Las palabras de 32 bits salen una tras otra, bit a bit, con la modulación bipolar RZ: un 1 es HI, un 0 es LO y entre bit y bit la línea vuelve a NULL. Entre palabra y palabra hay un hueco (gap) de 4 bits en NULL.</li>
+        <li>Modo diferencial: la línea A y la línea B llevan la mitad de la tensión, con signo contrario (A − B = ±10 V).</li>
+        <li>Todos los receptores reciben todas las palabras, pero cada uno solo decodifica las etiquetas que necesita y comprueba la paridad impar; si falla, descarta la palabra.</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Cómo usarlo</h2>
+      <ul>
+        <li>«Pausa / Continuar» detiene la animación; «Siguiente bit» avanza de uno en uno cuando está en pausa.</li>
+        <li>«Ruido en la próxima palabra» cambia un bit de la siguiente palabra: los receptores lo detectan por la paridad.</li>
+        <li>«LRU Y intenta responder» muestra por qué no se puede transmitir hacia la fuente por el mismo bus.</li>
+        <li>Velocidad alta (100 kbit/s) o baja (12,5 kbit/s): cambia los tiempos reales (la animación va mucho más lenta).</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Datos de la simulación</h2>
+      <p>Etiquetas, parámetros y escalas: valores de ejemplo para la clase (consulta siempre la documentación del equipo).</p>
+      <p class="nota-ref">Apuntes de la UD4, págs. 4-5 y 8-12.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1428 · Técnicas digitales y sistemas de instrumentos electrónicos en aeromecánica · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  // ── CÁLCULO (inicio)
+  // etiqueta, parámetro, unidad, escala BNR, bits de datos, valor inicial, variación por vuelta, decimales
+  const PALABRAS = [
+    ["203", "Altitud", "ft", 131072, 17, 35000, 20, 0],
+    ["205", "Número de Mach", "", 4.096, 16, 0.780, 0.001, 3],
+    ["206", "Velocidad (CAS)", "kt", 1024, 14, 280, 0.5, 1],
+    ["320", "Rumbo magnético", "°", 180, 12, 90, 0.5, 1],
+  ];
+  const RECEPTORES = [ // nombre, función, etiquetas que necesita, x del punto de conexión
+    ["LRU Y", "indicador de velocidad", ["205", "206"], 38],
+    ["LRU Z", "altímetro", ["203"], 60],
+    ["LRU W", "piloto automático", ["203", "206", "320"], 82],
+  ];
+  const GAP = 4;   // bits de NULL entre palabras
+
+  function roundPy(x) {
+    if (Math.abs(x % 1) === 0.5) return 2 * Math.round(x / 2);
+    return Math.round(x);
+  }
+  function fijoPy(x, dec) {
+    const neg = x < 0 || Object.is(x, -0);
+    const s = Math.abs(x).toFixed(100);
+    let [e, f] = s.split(".");
+    let digs = (e + f.slice(0, dec)).split("").map(Number);
+    const resto = f.slice(dec);
+    const sube = resto[0] > "5" || (resto[0] === "5" && (/[1-9]/.test(resto.slice(1)) || digs[digs.length - 1] % 2 === 1));
+    if (sube) {
+      let i = digs.length - 1;
+      while (i >= 0) { if (digs[i] === 9) { digs[i] = 0; i--; } else { digs[i]++; break; } }
+      if (i < 0) digs.unshift(1);
+    }
+    const ent = digs.slice(0, digs.length - dec).join("") || "0";
+    const fr = digs.slice(digs.length - dec).join("");
+    return (neg ? "-" : "") + ent + (dec > 0 ? "." + fr : "");
+  }
+  // fmt() del Python: millares con punto y coma decimal
+  function fmt(val, dec) {
+    let [e, f] = fijoPy(val, dec).split(".");
+    e = e.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return f !== undefined ? e + "," + f : e;
+  }
+  const bin = (v, n) => v.toString(2).padStart(n, "0");
+
+  function codificar(i, vuelta) {
+    const [etq, , , esc, nb, v0, dv] = PALABRAS[i];
+    const val = v0 + dv * (vuelta % 20);
+    const b = new Array(33).fill(0);
+    const d = etq.split("").map(Number);
+    const eb = bin(d[0], 2) + bin(d[1], 3) + bin(d[2], 3);
+    for (let k = 0; k < 8; k++) b[1 + k] = Number(eb[k]);              // MSB de la etiqueta en el bit 1
+    const n = roundPy(val / esc * 2 ** nb) & ((1 << (nb + 1)) - 1);    // signo + nb bits, complemento a dos
+    const lsb = 29 - nb;
+    for (let k = 0; k <= nb; k++) b[lsb + k] = (n >> k) & 1;
+    b[30] = 1; b[31] = 1;                                               // SSM 11: operación normal (BNR)
+    let u = 0; for (let k = 1; k <= 31; k++) u += b[k];
+    b[32] = u % 2 === 0 ? 1 : 0;
+    return { b, val };
+  }
+  const campo = (bit) => (bit <= 8 ? "ETIQUETA" : bit <= 10 ? "SDI" : bit <= 29 ? "DATOS" : bit <= 31 ? "SSM" : "P");
+  const textoValor = (nombre, val, dec, ud) => `${nombre}: ${fmt(val, dec)}${ud === "" || ud === "°" ? "" : " "}${ud}`;
+
+  function palabraActual(st) {
+    const { b, val } = codificar(st.i, st.vuelta);
+    const bb = b.slice();
+    if (st.ruido !== null) bb[st.ruido] = 1 - bb[st.ruido];
+    return { b: bb, val };
+  }
+
+  // Lógica de recepción: estado de cada receptor (texto, detalle, tipo)
+  function recibir(st, b) {
+    let e = 0; for (let k = 1; k <= 8; k++) e = (e << 1) | b[k];
+    const etqO = e.toString(8).padStart(3, "0");
+    let u = 0; for (let k = 1; k <= 32; k++) u += b[k];
+    const parOk = u % 2 === 1;
+    const [, nombre, ud, , , , , dec] = PALABRAS[st.i];
+    for (const [nom, , etqs] of RECEPTORES) {
+      if (!parOk) st.rx[nom] = ["Error de paridad", `descarta la palabra (${u} unos)`, "mal"];
+      else if (etqs.includes(etqO)) {
+        const { val } = codificar(st.i, st.vuelta);
+        st.rx[nom] = [`Acepta la ${etqO}`, textoValor(nombre, val, dec, ud), "ok"];
+      } else st.rx[nom] = [`Ignora la ${etqO}`, "no la necesita", "no"];
+    }
+  }
+
+  function avanzar(st, azar = Math.random) {
+    st.bit += 1;
+    if (st.bit === 32) { recibir(st, palabraActual(st).b); st.cuenta += 1; }   // palabra completa
+    if (st.bit >= 32 + GAP) {                                                  // siguiente palabra
+      st.bit = 0;
+      st.i = (st.i + 1) % PALABRAS.length;
+      if (st.i === 0) st.vuelta += 1;
+      st.ruido = st.ruidoProx ? 11 + Math.floor(azar() * 18) : null;          // bits 11 a 28
+      st.ruidoProx = false;
+    }
+  }
+
+  // Textos del panel de información
+  function info(st) {
+    const { val } = palabraActual(st);
+    const [etq, nombre, ud, , , , , dec] = PALABRAS[st.i];
+    const k = st.bit;
+    const tbit = st.vel === "alta" ? 10 : 80;
+    const g = (x) => String(x).replace(".", ",");
+    const limpia = codificar(st.i, st.vuelta).b;
+    let unos = 0; for (let i = 1; i <= 31; i++) unos += limpia[i];
+    const pb = limpia[32];
+    return {
+      etq: `Etiqueta ${etq}₈`,
+      valor: textoValor(nombre, val, dec, ud),
+      formato: "BNR · SDI 00 (todas) · SSM 11 (normal)",
+      estado: k < 32 ? `Enviando el bit ${k + 1} de 32  (${campo(k + 1).toLowerCase()})` : `Gap: ${GAP} bits en NULL (fin de palabra)`,
+      t: k < 32 ? `t = ${g((k + 0.5) * tbit)} µs desde el inicio de la palabra` : "los receptores ya tienen los 32 bits",
+      unos: `unos en los bits 1-31 del transmisor: ${unos}`,
+      paridad: `→ ${pb ? "par" : "impar"}, así que P = ${pb}: total impar`,
+      ruido: st.ruido !== null ? `¡Ruido! El bit ${st.ruido} ha llegado cambiado.` : "",
+      vel: `Velocidad ${st.vel === "alta" ? "alta (100 kbit/s ± 1 %)" : "baja (12,5 kbit/s; de 12,0 a 14,5)"}`,
+      cuenta: `Palabras enviadas: ${st.cuenta}  ·  animación unas ${st.vel === "alta" ? "9.000" : "1.100"} veces más lenta`,
+      titulo: `La línea, bit a bit: 1 → HI, 0 → LO y vuelta a NULL. Cada bit dura ${tbit} µs; la palabra, ${32 * tbit} µs + gap de ${GAP * tbit} µs`,
+    };
+  }
+  function estadoInicial() {
+    const rx = {}; for (const r of RECEPTORES) rx[r[0]] = ["—", "Esperando la primera palabra", "no"];
+    return { i: 0, bit: 0, vuelta: 0, pausa: false, ruidoProx: false, ruido: null, responder: false, vel: "alta", rx, cuenta: 0 };
+  }
+  // ── CÁLCULO (fin)
+
+  const NAVY = "#0A1F3C", GRIS = "#5A6675", TXT = "#1F2937", AMB = "#F2A93B", AMB2 = "#C4821E";
+  const COLRX = { ok: ["#E1F5EE", "#0F6E56"], mal: ["#FCEBEB", "#A32D2D"], no: ["#F1EFE8", "#888780"] };
+  const LA = "#A32D2D", LB = "#185FA5";
+  const CAMPO = { ETIQUETA: "#FAEEDA", SDI: "#E6F1FB", DATOS: "#E1F5EE", SSM: "#EEEDFE", P: "#F2A93B" };
+  const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  const st = estadoInicial();
+
+  function lienzoAdaptable(cont, o, altoDe) {
+    const L = new Sim.Lienzo(cont, o);
+    const ajustar = L._ajustar.bind(L);
+    L._ajustar = () => { const w = Math.max(50, L.canvas.parentElement.clientWidth); L.proporcion = altoDe(w) / w; ajustar(); };
+    L._ajustar();
+    return L;
+  }
+  const T = (ctx, s, x, y, e) => Sim.texto(ctx, s, x, y, e);
+  function masa(ctx, x, y) {
+    Sim.polilinea(ctx, [[x, y], [x, y + 8]], { color: "#9AA3AE", ancho: 1.3 });
+    [7, 4.5, 2].forEach((w, k) => Sim.polilinea(ctx, [[x - w, y + 8 + k * 3], [x + w, y + 8 + k * 3]], { color: "#9AA3AE", ancho: 1.3 }));
+  }
+  function triangulo(ctx, pts, relleno, borde) {
+    Sim.polilinea(ctx, pts, { cerrar: true, relleno, color: borde || relleno, ancho: 0.8 });
+  }
+
+  // ── Esquema del bus (horizontal en pantalla ancha, vertical en el móvil)
+  const ESTRECHO = 620;
+  const lienzoBus = lienzoAdaptable("#bus", { etiqueta: "Esquema del bus ARINC 429: una fuente y tres receptores" },
+    (w) => (w < ESTRECHO ? 470 : Math.max(300, w * 0.37)));
+  lienzoBus.o.dibujar = (ctx, w, h) => {
+    const dos = w < ESTRECHO;
+    document.getElementById("cap-estrecho").hidden = !dos;
+    if (dos) return busVertical(ctx, w, h);
+    const X = (x) => x / 100 * w, Y = (y) => h - y / 41 * h;   // coordenadas del Python (0-100 × 0-41; el aviso de «responder» va en HTML)
+    // transmisor
+    Sim.caja(ctx, X(1), Y(36), X(17), Y(22) - Y(36), { relleno: "#E6F1FB", color: NAVY, ancho: 1.8 });
+    T(ctx, "LRU X", X(9.5), Y(33), { tam: 17, negrita: true, alin: "center", color: NAVY });
+    T(ctx, "fuente", X(9.5), Y(29.6), { tam: 12.5, alin: "center", color: GRIS });
+    T(ctx, "ordenador que\nenvía los datos", X(9.5), Y(27.4), { tam: 11.5, alin: "center", color: GRIS });
+    T(ctx, "TX", X(18.4), Y(31.8), { tam: 11, negrita: true, color: NAVY });
+    // par trenzado
+    const pa = [], pb = [];
+    for (let i = 0; i <= 400; i++) { const x = 19 + 76 * i / 400; pa.push([X(x), Y(30 + 0.9 * Math.sin(x * 2.2))]); pb.push([X(x), Y(30 - 0.9 * Math.sin(x * 2.2))]); }
+    Sim.polilinea(ctx, pa, { color: LA, ancho: 1.8 }); Sim.polilinea(ctx, pb, { color: LB, ancho: 1.8 });
+    T(ctx, "A", X(96), Y(31.2), { tam: 13, negrita: true, color: LA });
+    T(ctx, "B", X(96), Y(27.6), { tam: 13, negrita: true, color: LB });
+    Sim.caja(ctx, X(20), Y(32.6), X(74), Y(27.4) - Y(32.6), { color: "#9AA3AE", ancho: 1.3, guion: [6, 4], radio: 14 });
+    masa(ctx, X(20.5), Y(27.4)); masa(ctx, X(93.5), Y(27.4));
+    T(ctx, "par de cables trenzados y apantallados (pantalla a masa en los dos extremos)", X(57), Y(34.4), { tam: 12, alin: "center", color: GRIS });
+    triangulo(ctx, [[X(24), Y(39.5)], [X(24), Y(37.5)], [X(27), Y(38.5)]], NAVY);
+    T(ctx, "un solo sentido: de la fuente a los receptores (bus unidireccional, lazo abierto)", X(28), Y(38.5), { tam: 13, negrita: true, base: "middle", color: NAVY });
+    // flechas que avanzan con los bits
+    const fase = (st.bit % 4) * 1.6;
+    for (let xx = 23 + fase; xx < 92; xx += 6.4) triangulo(ctx, [[X(xx), Y(31.3)], [X(xx), Y(28.7)], [X(xx + 1.4), Y(30)]], AMB, AMB2);
+    // receptores
+    for (const [nom, fun, etqs, xc] of RECEPTORES) {
+      Sim.polilinea(ctx, [[X(xc) - 4, Y(29.2)], [X(xc) - 4, Y(17.5)]], { color: LA, ancho: 1.5 });
+      Sim.polilinea(ctx, [[X(xc) + 4, Y(29.2)], [X(xc) + 4, Y(17.5)]], { color: LB, ancho: 1.5 });
+      Sim.circulo(ctx, X(xc) - 4, Y(29.2), 2.6, { relleno: TXT, color: null }); Sim.circulo(ctx, X(xc) + 4, Y(29.2), 2.6, { relleno: TXT, color: null });
+      const [est, det, tipo] = st.rx[nom];
+      const [f, e] = COLRX[tipo];
+      Sim.caja(ctx, X(xc - 10), Y(17.5), X(20), Y(1) - Y(17.5), { relleno: f, color: e, ancho: 1.6 });
+      T(ctx, nom, X(xc), Y(14.6), { tam: 15, negrita: true, alin: "center", color: NAVY });
+      T(ctx, fun, X(xc), Y(12.0), { tam: 11.5, alin: "center", color: GRIS });
+      T(ctx, "usa: " + [...etqs].sort().join(", "), X(xc), Y(9.5), { tam: 11.5, negrita: true, alin: "center", color: AMB2 });
+      T(ctx, est, X(xc), Y(6.3), { tam: 12.5, negrita: true, alin: "center", base: "middle", color: tipo === "no" ? GRIS : e });
+      T(ctx, det, X(xc), Y(3.0), { tam: w < 800 ? 10 : 11, alin: "center", base: "middle", color: TXT });
+    }
+    T(ctx, "…hasta 20\nreceptores\npor fuente", X(99), Y(11.5), { tam: 11.5, alin: "right", color: GRIS });
+    if (st.responder) {
+      const xc = RECEPTORES[0][3];
+      Sim.flecha(ctx, X(xc - 10), Y(18.5), X(19), Y(22.5), { color: "#A32D2D", ancho: 2.2, guion: [7, 5], punta: 12 });
+      T(ctx, "✕", X(28), Y(20.2), { tam: 28, negrita: true, alin: "center", base: "middle", color: "#A32D2D" });
+    }
+  };
+  function busVertical(ctx, w, h) {
+    const xp = 30, y0 = 84, y1 = h - 34;
+    Sim.caja(ctx, 8, 8, w - 16, 62, { relleno: "#E6F1FB", color: NAVY, ancho: 1.8 });
+    T(ctx, "LRU X", 20, 34, { tam: 17, negrita: true, color: NAVY });
+    T(ctx, "fuente · ordenador que envía los datos", 20, 56, { tam: 12, color: GRIS });
+    T(ctx, "TX", xp + 10, 84, { tam: 11, negrita: true, color: NAVY });
+    const pa = [], pb = [];
+    for (let i = 0; i <= 300; i++) { const y = 70 + (y1 - 70) * i / 300; const s = 4 * Math.sin(y * 0.16); pa.push([xp + s, y]); pb.push([xp - s, y]); }
+    Sim.polilinea(ctx, pa, { color: LA, ancho: 1.8 }); Sim.polilinea(ctx, pb, { color: LB, ancho: 1.8 });
+    Sim.caja(ctx, xp - 9, y0 - 8, 18, y1 - y0 + 8, { color: "#9AA3AE", ancho: 1.3, guion: [6, 4], radio: 9 });
+    masa(ctx, xp + 9, y1 - 6);
+    T(ctx, "A", xp - 24, y1 - 2, { tam: 13, negrita: true, color: LA }); T(ctx, "B", xp + 22, y1 + 14, { tam: 13, negrita: true, color: LB });
+    const fase = (st.bit % 4) * 10;
+    for (let yy = y0 + fase; yy < y1 - 12; yy += 40) triangulo(ctx, [[xp - 6, yy], [xp + 6, yy], [xp, yy + 9]], AMB, AMB2);
+    const x1 = 58, alto = 92, sep = 12;
+    RECEPTORES.forEach(([nom, fun, etqs], j) => {
+      const yb = 92 + j * (alto + sep), yc = yb + alto / 2;
+      Sim.polilinea(ctx, [[xp, yc - 4], [x1, yc - 4]], { color: LA, ancho: 1.5 });
+      Sim.polilinea(ctx, [[xp, yc + 4], [x1, yc + 4]], { color: LB, ancho: 1.5 });
+      const [est, det, tipo] = st.rx[nom];
+      const [f, e] = COLRX[tipo];
+      Sim.caja(ctx, x1, yb, w - x1 - 8, alto, { relleno: f, color: e, ancho: 1.6 });
+      T(ctx, nom, x1 + 10, yb + 21, { tam: 15, negrita: true, color: NAVY });
+      T(ctx, fun, x1 + 70, yb + 21, { tam: 12, color: GRIS });
+      T(ctx, "usa: " + [...etqs].sort().join(", "), x1 + 10, yb + 41, { tam: 12, negrita: true, color: AMB2 });
+      T(ctx, est, x1 + 10, yb + 62, { tam: 13, negrita: true, color: tipo === "no" ? GRIS : e });
+      T(ctx, det, x1 + 10, yb + 81, { tam: 12, color: TXT });
+    });
+    T(ctx, "…hasta 20 receptores por fuente", x1, h - 12, { tam: 12, color: GRIS });
+    if (st.responder) {
+      const yb = 92;
+      Sim.flecha(ctx, w - 40, yb + 4, w - 40, 72, { color: "#A32D2D", ancho: 2.4, guion: [6, 4], punta: 11 });
+      T(ctx, "✕", w - 62, yb - 4, { tam: 24, negrita: true, alin: "center", base: "middle", color: "#A32D2D" });
+    }
+  }
+
+  // ── Señal: A − B, A a masa y B a masa
+  const lienzoSen = lienzoAdaptable("#senal", { etiqueta: "Señal bipolar RZ en las líneas A y B" }, () => 262);
+  lienzoSen.o.dibujar = (ctx, w) => {
+    const { b } = palabraActual(st);
+    const izq = w < 520 ? 52 : 66, der = 6;
+    const bw = (w - izq - der) / 36;
+    const X = (k) => izq + k * bw;
+    const kAct = st.bit;
+    ctx.fillStyle = "#EEF0F3"; ctx.fillRect(X(32), 4, GAP * bw, 214);
+    const filas = [[50, 34, "A − B", NAVY, "±10 V"], [130, 17, "A a masa", LA, "±5 V"], [176, 17, "B a masa", LB, "±5 V"]];
+    filas.forEach(([y0, amp, nom, col, rango], row) => {
+      ctx.strokeStyle = "#E3E7EC"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(izq, y0); ctx.lineTo(w - der, y0); ctx.stroke();
+      const pts = [[X(0), y0]];
+      for (let k = 0; k < 32; k++) {
+        if (k > kAct) break;
+        const s = (b[k + 1] ? 1 : -1) * (row < 2 ? 1 : -1);
+        const yy = y0 - s * amp;
+        pts.push([X(k), y0], [X(k), yy], [X(k + 0.5), yy], [X(k + 0.5), y0], [X(k < kAct ? k + 1 : k + 0.5), y0]);
+      }
+      if (kAct >= 32) pts.push([X(kAct + 1), y0]);
+      Sim.polilinea(ctx, pts, { color: col, ancho: row === 0 ? 1.8 : 1.3 });
+      T(ctx, nom, izq - 5, y0 - 7, { tam: w < 520 ? 11 : 12, negrita: true, alin: "right", base: "middle", color: col });
+      T(ctx, rango, izq - 5, y0 + 9, { tam: 10.5, alin: "right", base: "middle", color: GRIS });
+    });
+    const yC = 200, hC = 18;
+    for (let k = 0; k < 32; k++) {
+      const bit = k + 1;
+      const c = bit === st.ruido ? "#FCEBEB" : CAMPO[campo(bit)];
+      ctx.fillStyle = k <= kAct ? c : "#FFFFFF"; ctx.fillRect(X(k), yC, bw, hC);
+      ctx.strokeStyle = "#D9E0E8"; ctx.lineWidth = 0.6; ctx.strokeRect(X(k), yC, bw, hC);
+      if (k <= kAct && bw >= 9) {
+        ctx.font = `bold ${Math.min(12, bw * 0.9)}px ${MONO}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillStyle = bit === st.ruido ? "#A32D2D" : TXT; ctx.fillText(String(b[bit]), X(k + 0.5), yC + hC / 2 + 1);
+      }
+    }
+    T(ctx, "gap", X(34), yC + hC / 2, { tam: 11, alin: "center", base: "middle", color: GRIS });
+    const marcas = bw < 13 ? [1, 8, 11, 20, 29, 32] : [1, 8, 9, 10, 11, 20, 29, 30, 31, 32];
+    for (const bit of marcas) T(ctx, String(bit), X(bit - 0.5), yC + hC + 11, { tam: 10, alin: "center", base: "middle", color: GRIS });
+    for (const [txt, corto, a, z] of [["ETIQUETA (1-8)", "ETQ", 0, 8], ["SDI", "SDI", 8, 10], ["DATOS + signo (11-29)", "DATOS", 10, 29], ["SSM", "SSM", 29, 31], ["P", "P", 31, 32]]) {
+      ctx.font = `bold 11px ${Sim.FUENTE}`;
+      const disp = (z - a) * bw - 3;
+      const t = ctx.measureText(txt).width <= disp ? txt : ctx.measureText(corto).width <= disp ? corto : "";
+      if (t) T(ctx, t, X((a + z) / 2), yC + hC + 30, { tam: 11, negrita: true, alin: "center", base: "middle", color: NAVY });
+    }
+    const xc = Math.min(kAct, 35) + (kAct < 32 ? 0.5 : 1);
+    Sim.polilinea(ctx, [[X(xc), 4], [X(xc), 218]], { color: AMB, ancho: 2 });
+  };
+
+  // ── Panel de información
+  const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  function pintarInfo() {
+    const t = info(st);
+    Sim.html("#info",
+      `<p class="etq">${esc(t.etq)}</p><p>${esc(t.valor)}</p><p class="gris">${esc(t.formato)}</p>
+      <p class="fuerte sep">${esc(t.estado)}</p><p class="gris">${esc(t.t)}</p>
+      <p class="fuerte sep">Paridad (bit 32):</p><p>${esc(t.unos)}</p><p>${esc(t.paridad)}</p>
+      ${t.ruido ? `<p class="rojo sep">${esc(t.ruido)}</p>` : ""}
+      <p class="sep">${esc(t.vel)}</p><p class="gris">Nunca se mezclan las dos velocidades en el mismo bus.</p>
+      <p class="gris sep">${esc(t.cuenta)}</p>`);
+    document.getElementById("tit-senal").textContent = t.titulo;
+  }
+  function actualizar() {
+    pintarInfo();
+    document.getElementById("aviso-resp").hidden = !st.responder;
+    lienzoBus.pedir(); lienzoSen.pedir();
+  }
+
+  // ── Mandos y animación (un bit cada 90 ms, como el temporizador del Python)
+  const mandos = document.getElementById("mandos");
+  Sim.opciones(mandos, { titulo: "Velocidad", etiquetas: ["Alta: 100 kbit/s", "Baja: 12,5 kbit/s"], activa: 0, alCambiar: (i) => { st.vel = i === 0 ? "alta" : "baja"; actualizar(); } });
+  const bPausa = Sim.boton(mandos, "Pausa", () => pausa(), { primario: true });
+  Sim.boton(mandos, "Siguiente bit", () => { if (!st.pausa) pausa(); paso(); });
+  const bRuido = Sim.boton(mandos, "Ruido en la próxima palabra", () => { st.ruidoProx = true; bRuido.textContent = "Ruido preparado: llegará en la próxima palabra"; });
+  const bResp = Sim.boton(mandos, "LRU Y intenta responder", () => {
+    st.responder = !st.responder; bResp.textContent = st.responder ? "Ocultar" : "LRU Y intenta responder"; actualizar();
+  });
+  bRuido.classList.add("ruido", "ancho"); bResp.classList.add("resp", "ancho");
+
+  function paso() {
+    const antes = st.i;
+    avanzar(st);
+    if (st.bit === 0 && st.i !== antes) bRuido.textContent = "Ruido en la próxima palabra";
+    actualizar();
+  }
+  let acc = 0;
+  const anim = Sim.animar((dt) => {
+    acc += dt;
+    let n = 0;
+    while (acc >= 0.09 && n < 3) { acc -= 0.09; n++; paso(); }
+  });
+  function pausa() {
+    st.pausa = !st.pausa;
+    bPausa.textContent = st.pausa ? "Continuar" : "Pausa";
+    if (st.pausa) anim.parar(); else { acc = 0; anim.arrancar(); }
+  }
+  actualizar();
+  anim.arrancar();
+  /*PRUEBA*/{ const q = new URLSearchParams(location.search); if (q.get('n')) { if (q.get('r')) st.ruidoProx = true; if (q.get('resp')) bResp.click(); if (q.get('baja')) st.vel = 'baja'; for (let k = 0; k < +q.get('n'); k++) paso(); pausa(); } }/*FIN*/
+})();
+</script>
+</body>
+</html>

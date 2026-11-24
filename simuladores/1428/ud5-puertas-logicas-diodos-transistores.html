@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Elige una compuerta hecha con diodos o con transistores, recorre su tabla de verdad y mira por dónde va la corriente.">
+<title>Compuertas lógicas por dentro: diodos y transistores · 1428</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .salida-x { border: 1.5px solid #888780; background: #F1EFE8; border-radius: var(--radius); padding: 10px 16px; }
+  .salida-x.alto { border-color: #BA7517; background: #FAEEDA; }
+  .salida-x .ent { font-size: 1.05rem; }
+  .salida-x .x { font-size: 1.9rem; font-weight: 700; color: var(--navy); line-height: 1.25; }
+  .salida-x .niv { color: #5A6675; font-size: .95rem; }
+  table.verdad th, table.verdad td { text-align: center; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 1.05rem; }
+  table.verdad th { background: var(--navy); color: var(--white); }
+  table.verdad tr.actual td { background: #FAEEDA; font-weight: 700; }
+  .expr { color: #C4821E; font-weight: 700; margin: 0 0 8px; }
+  .ahora { list-style: none; padding: 0; margin: 4px 0 0; }
+  .ahora li { margin: 2px 0; }
+  .ahora li::before { content: "▪ "; }
+  .on { color: #0F6E56; } .off { color: #888780; }
+  #exp p { margin: 0 0 8px; }
+  @media (min-width: 901px) { .sim > .lateral { grid-row: span 2; } .sim > #exp { grid-column: 1; } }
+  .lienzo canvas { touch-action: manipulation; }   /* que se pueda desplazar la página tocando el esquema */
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1428 Técnicas digitales y sistemas de instrumentos electrónicos</a></p>
+    <h1>Compuertas lógicas por dentro: diodos y transistores</h1>
+    <p class="sub">UD5 · Circuitos lógicos · materialización con diodos y resistencias (RDL) y con transistores y resistencias (RTL)</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div id="esquema"></div>
+    </div>
+    <aside class="lateral">
+      <div class="tarjeta"><h2>Mandos</h2><div class="controles" id="mandos"></div>
+        <p class="nota-ref">Los diodos y transistores trabajan solo en dos estados (conducen o no conducen), como en los apuntes: así cada tensión es un 0 o un 1 claro.</p>
+      </div>
+      <div class="salida-x" id="salidaX"></div>
+      <div class="tarjeta"><h2>Tabla de verdad</h2><div class="tabla-wrap"><table class="datos verdad" id="tabla"></table></div></div>
+    </aside>
+    <div class="tarjeta" id="exp"></div>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Cómo se materializan las compuertas lógicas con diodos y resistencias (RDL) y con transistores y resistencias (RTL), según los apuntes de la UD5 (págs. 6–9: figuras 4, 6 y 7):</p>
+      <ul>
+        <li>AND con diodos (RDL) y AND con transistores (RTL)</li>
+        <li>OR con diodos (RDL) y OR con transistores (RTL)</li>
+        <li>NOT con transistor</li>
+      </ul>
+      <p>Los diodos y transistores trabajan solo en sus dos extremos, como dicen los apuntes: diodo → conduce o cortado; transistor → saturado (conduce) o en corte.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Cómo usarlo</h2>
+      <ul>
+        <li>Elige la compuerta.</li>
+        <li>Cambia las entradas con los botones «A» y «B» o tocando las cajas A y B del circuito.</li>
+        <li>«Recorrer la tabla» pasa por todas las combinaciones, una cada 1,5 s.</li>
+        <li>En ámbar se ve por dónde circula la corriente; en verde, los componentes que conducen.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1428 · Técnicas digitales y sistemas de instrumentos electrónicos en aeromecánica · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+  const NAVY = "#0A1F3C", GRIS = "#5A6675", TXT = "#1F2937", NEGRO = "#2C2C2A";
+  const ON_F = "#E1F5EE", ON_E = "#0F6E56", OFF_F = "#F1EFE8", OFF_E = "#888780";
+  const UNO_F = "#FAEEDA", UNO_E = "#BA7517", CORR = "#EF9F27";
+
+  const PUERTAS = ["AND con diodos (RDL)", "AND con transistores (RTL)", "OR con diodos (RDL)",
+    "OR con transistores (RTL)", "NOT con transistor"];
+  const APUNTES = {
+    "AND con diodos (RDL)": ["X = A · B", "Figura 4 (pág. 6)",
+      "Cuando cualquiera de las entradas A o B es baja (masa), su diodo conduce y lleva la salida a un voltaje bajo. " +
+      "Solo cuando las dos entradas son altas (+5 V) los dos diodos quedan cortados: como no pasa corriente por la " +
+      "resistencia, la salida presenta los +5 V de la alimentación."],
+    "AND con transistores (RTL)": ["X = A · B", "Figura 4 (pág. 6)",
+      "Si cualquiera de las entradas es baja, su transistor queda en corte; el transistor de salida (Q3) pasa a " +
+      "saturación y su colector presenta una masa: salida baja. Solo con A y B altas los transistores de entrada se " +
+      "saturan y llevan a masa la base de Q3; al no conducir Q3, la salida es alta (+5 V)."],
+    "OR con diodos (RDL)": ["X = A + B", "Figura 6 (pág. 8)",
+      "Las entradas valen 0 (masa) o 1 (+5 V). Cuando cualquier entrada es 1, su diodo conduce y la salida es 1. " +
+      "Cuando las dos son 0, ningún diodo conduce y la salida es 0."],
+    "OR con transistores (RTL)": ["X = A + B", "Figura 6 (pág. 8)",
+      "Cuando cualquier entrada es 1, su transistor conduce y deja pasar corriente por la resistencia de emisor: la " +
+      "salida toma el 1 por la tensión que cae en ella. Si las dos entradas son 0, los transistores no conducen y la " +
+      "caída en la resistencia de emisor es 0."],
+    "NOT con transistor": ["X = Ā", "Figura 7 (pág. 9)",
+      "Cuando A es 1, el transistor conduce y la salida en el colector es masa: 0. Si A es 0, el transistor no conduce " +
+      "y, al no pasar corriente por la resistencia, la salida en el colector presenta +5 V: 1."],
+  };
+
+  // ── Coordenadas del esquema (las del Python): x de 0 a 10,2 y y de 0,8 a 10 (hacia arriba)
+  const ANCHO = 720, XMAX = 10.2, YMIN = 0.8, YMAX = 10;
+  const U = ANCHO / XMAX;
+  const X = (x) => x * U, Y = (y) => (YMAX - y) * U;
+  const F = (pt) => pt * 2.05;          // tamaño de letra (puntos del Python → unidades del lienzo)
+
+  // G: estado de la pasada de dibujo. Con G.ctx = null solo se registran componentes y cajas.
+  let G = null;
+
+  function W(pts, lw = 2, c = NEGRO) {
+    if (!G.ctx) return;
+    Sim.polilinea(G.ctx, pts.map(([x, y]) => [X(x), Y(y)]), { color: c, ancho: lw * 1.4 });
+  }
+  function T(s, x, y, e = {}) { if (G.ctx) Sim.texto(G.ctx, s, X(x), Y(y), Object.assign({ tam: F(10), color: TXT }, e)); }
+  function rect(x, y, w, h, relleno, borde, lw = 1.4) {
+    const c = G.ctx; c.save(); c.fillStyle = relleno; c.strokeStyle = borde; c.lineWidth = lw * 1.4;
+    c.fillRect(X(x), Y(y + h), w * U, h * U); c.strokeRect(X(x), Y(y + h), w * U, h * U); c.restore();
+  }
+  function R(x0, y0, x1, y1, label, lpos = "r") {
+    W([[x0, y0], [x1, y1]]);
+    if (!G.ctx) return;
+    const xm = (x0 + x1) / 2, ym = (y0 + y1) / 2;
+    if (x0 === x1) {
+      const h = Math.min(0.75, Math.abs(y1 - y0) * 0.6);
+      rect(xm - 0.18, ym - h / 2, 0.36, h, "#FAC775", "#BA7517");
+      if (label) T(label, xm + (lpos === "r" ? 0.3 : -0.3), ym, { base: "middle", alin: lpos === "r" ? "left" : "right", tam: F(9.5) });
+    } else {
+      const w = Math.min(0.75, Math.abs(x1 - x0) * 0.6);
+      rect(xm - w / 2, ym - 0.18, w, 0.36, "#FAC775", "#BA7517");
+      if (label && lpos === "b") T(label, xm, ym - 0.3, { alin: "center", base: "top", tam: F(9.5) });
+      else if (label) T(label, xm, ym + 0.3, { alin: "center", tam: F(9.5) });
+    }
+  }
+  function VCC(x0, x1, y) {
+    W([[x0, y], [x1, y]], 3, "#A32D2D");
+    T("+5 V", x1 + 0.12, y, { base: "middle", tam: F(11), negrita: true, color: "#A32D2D" });
+  }
+  function GND(x, y) {
+    W([[x, y + 0.3], [x, y]]);
+    [0.36, 0.24, 0.12].forEach((w, k) => W([[x - w, y - k * 0.11], [x + w, y - k * 0.11]]));
+  }
+  function NODO(x, y) { if (G.ctx) Sim.circulo(G.ctx, X(x), Y(y), 3.5, { relleno: NEGRO, color: null }); }
+  function poligono(pts, relleno, borde, lw = 1.5) {
+    if (!G.ctx) return;
+    Sim.polilinea(G.ctx, pts.map(([x, y]) => [X(x), Y(y)]), { cerrar: true, relleno, color: borde || relleno, ancho: lw * 1.4 });
+  }
+  // Diodo horizontal entre x0 y x1; apunta = "L" o "R" (sentido ánodo → cátodo)
+  function DIODO(x0, x1, y, apunta, nombre) {
+    G.comp.push({ nombre, tipo: "diodo", onTxt: "conduce" });
+    const xm = (x0 + x1) / 2;
+    W([[x0, y], [x1, y]]);
+    if (!G.ctx) return;
+    const on = !!G.est[nombre];
+    const d = apunta === "R" ? 0.28 : -0.28;
+    poligono([[xm - d, y + 0.28], [xm - d, y - 0.28], [xm + d, y]], on ? ON_F : C.WHITE, on ? ON_E : NEGRO);
+    W([[xm + d, y - 0.3], [xm + d, y + 0.3]], 2.2, on ? ON_E : NEGRO);
+    T(nombre, xm, y + 0.45, { alin: "center", negrita: true });
+    T(on ? "conduce" : "cortado", xm, y - 0.62, { alin: "center", base: "top", negrita: true, tam: F(9), color: on ? ON_E : OFF_E });
+  }
+  // Transistor NPN. Devuelve los terminales B, C y E.
+  function NPN(cx, cy, nombre, espejo = false, onTxt = "saturado") {
+    G.comp.push({ nombre, tipo: "trans", onTxt });
+    const m = espejo ? -1 : 1;
+    const t = { B: [cx - 0.8 * m, cy], C: [cx + 0.45 * m, cy + 0.8], E: [cx + 0.45 * m, cy - 0.8] };
+    if (!G.ctx) return t;
+    const on = !!G.est[nombre];
+    Sim.circulo(G.ctx, X(cx), Y(cy), 0.7 * U, { relleno: on ? ON_F : OFF_F, color: on ? ON_E : NEGRO, ancho: 2.5 });
+    const xb = cx - 0.3 * m;
+    W([[xb, cy - 0.42], [xb, cy + 0.42]], 3.5);
+    W([[cx - 0.8 * m, cy], [xb, cy]]);
+    W([[xb, cy + 0.2], [cx + 0.45 * m, cy + 0.6], [cx + 0.45 * m, cy + 0.8]], 1.8);
+    W([[xb, cy - 0.2], [cx + 0.45 * m, cy - 0.6], [cx + 0.45 * m, cy - 0.8]], 1.8);
+    const tip = [cx + 0.45 * m, cy - 0.6];
+    poligono([tip, [tip[0] - 0.3 * m, tip[1] + 0.03], [tip[0] - 0.14 * m, tip[1] + 0.24]], NEGRO, NEGRO, 1);
+    const alin = espejo ? "left" : "right";
+    T(nombre, cx - 0.85 * m, cy + 0.55, { alin, negrita: true });
+    T(on ? onTxt : "corte", cx - 0.85 * m, cy - 0.8, { alin, base: "top", negrita: true, tam: F(9), color: on ? ON_E : OFF_E });
+    return t;
+  }
+  // Caja de entrada lógica (se toca para cambiarla). Devuelve el punto de conexión.
+  // La caja es 0,3 más ancha que en el Python, hacia fuera, para que quepa «0 V (masa)» con letra legible.
+  function ENTRADA(nombre, x, y, lado = "L") {
+    const w = 1.45, x0 = lado === "L" ? x - 0.3 : x;
+    G.boxes[nombre] = [x0, y - 0.42, w, 0.84];
+    if (G.ctx) {
+      const val = nombre === "A" ? G.A : G.B;
+      Sim.caja(G.ctx, X(x0), Y(y + 0.42), w * U, 0.84 * U, { relleno: val ? UNO_F : OFF_F, color: val ? UNO_E : OFF_E, ancho: 2, radio: 0.12 * U });
+      T(`${nombre} = ${val}`, x0 + w / 2, y + 0.14, { alin: "center", base: "middle", negrita: true, tam: F(11.5) });
+      T(val ? "+5 V" : "0 V (masa)", x0 + w / 2, y - 0.2, { alin: "center", base: "middle", tam: F(8.5), color: GRIS });
+    }
+    return lado === "L" ? [x + 1.15, y] : [x, y];
+  }
+  function SALIDA(x, y) {
+    if (!G.ctx) return;
+    Sim.circulo(G.ctx, X(x), Y(y), 6, { relleno: C.WHITE, color: NEGRO, ancho: 2 });
+    Sim.circulo(G.ctx, X(x + 0.55), Y(y), 0.3 * U, { relleno: G.xl ? "#F09595" : OFF_F, color: "#444441", ancho: 2 });
+    T("X", x + 0.05, y + 0.5, { negrita: true, tam: F(12) });
+    T(`${num(G.vx, 1)} V`, x - 0.05, y - 0.55, { alin: "center", base: "top", negrita: true, tam: F(10.5), color: "#185FA5" });
+  }
+
+  // ── Circuitos (mismas coordenadas y lógica que el Python)
+  function c_and_diodos() {
+    VCC(5.8, 7.2, 9.2); R(6.5, 9.2, 6.5, 7.4, "R"); W([[6.5, 7.4], [6.5, 3.5]]);
+    const pa = ENTRADA("A", 0.8, 6.5), pb = ENTRADA("B", 0.8, 3.5);
+    W([pa, [3.4, 6.5]]); DIODO(3.4, 5.0, 6.5, "L", "DA"); W([[5.0, 6.5], [6.5, 6.5]]);
+    W([pb, [3.4, 3.5]]); DIODO(3.4, 5.0, 3.5, "L", "DB"); W([[5.0, 3.5], [6.5, 3.5]]);
+    NODO(6.5, 6.5); NODO(6.5, 5.0); W([[6.5, 5.0], [8.6, 5.0]]); SALIDA(8.6, 5.0);
+    return (A, B) => {
+      const caminos = [];
+      if (!A) caminos.push([[6.5, 9.2], [6.5, 6.5], pa]);
+      if (!B) caminos.push([[6.5, 9.2], [6.5, 3.5], pb]);
+      return [(A && B ? 5.0 : 0.7), { DA: !A, DB: !B }, caminos];
+    };
+  }
+  function c_or_diodos() {
+    const pa = ENTRADA("A", 0.8, 6.5), pb = ENTRADA("B", 0.8, 3.5);
+    W([pa, [3.4, 6.5]]); DIODO(3.4, 5.0, 6.5, "R", "DA"); W([[5.0, 6.5], [6.5, 6.5]]);
+    W([pb, [3.4, 3.5]]); DIODO(3.4, 5.0, 3.5, "R", "DB"); W([[5.0, 3.5], [6.5, 3.5]]);
+    W([[6.5, 6.5], [6.5, 3.5]]); R(6.5, 3.5, 6.5, 1.6, "R"); GND(6.5, 1.3);
+    NODO(6.5, 5.0); NODO(6.5, 3.5); W([[6.5, 5.0], [8.6, 5.0]]); SALIDA(8.6, 5.0);
+    return (A, B) => {
+      const caminos = [];
+      if (A) caminos.push([pa, [6.5, 6.5], [6.5, 1.6]]);
+      if (B) caminos.push([pb, [6.5, 3.5], [6.5, 1.6]]);
+      return [(A || B ? 4.3 : 0.0), { DA: !!A, DB: !!B }, caminos];
+    };
+  }
+  function c_not() {
+    VCC(6.3, 7.7, 9.2); R(7.0, 9.2, 7.0, 7.5, "Rc");
+    const t = NPN(6.55, 6.0, "Q");
+    W([[7.0, 7.5], t.C]); NODO(7.0, 7.25); W([[7.0, 7.25], [8.6, 7.25]]); SALIDA(8.6, 7.25);
+    W([t.E, [7.0, 3.9]]); GND(7.0, 3.6);
+    const pa = ENTRADA("A", 0.8, 6.0); R(pa[0], 6.0, t.B[0], 6.0, "Rb");
+    return (A) => {
+      const caminos = A ? [[pa, t.B], [[7.0, 9.2], [7.0, 3.9]]] : [];
+      return [(A ? 0.2 : 5.0), { Q: !!A }, caminos];
+    };
+  }
+  function c_and_rtl() {
+    VCC(4.0, 8.7, 9.4);
+    R(4.6, 9.4, 4.6, 7.9, "R1", "l"); NODO(4.6, 7.6); W([[4.6, 7.9], [4.6, 7.6]]);
+    const q1 = NPN(4.15, 6.4, "Q1"), q2 = NPN(4.15, 4.4, "Q2");
+    W([[4.6, 7.6], q1.C]); W([q1.E, q2.C]); W([q2.E, [4.6, 2.9]]); GND(4.6, 2.6);
+    const pa = ENTRADA("A", 0.6, 6.4); R(pa[0], 6.4, q1.B[0], 6.4, "RA");
+    const pb = ENTRADA("B", 0.6, 4.4); R(pb[0], 4.4, q2.B[0], 4.4, "RB");
+    const q3 = NPN(7.55, 6.4, "Q3");
+    W([[4.6, 7.6], [5.75, 7.6], [5.75, 6.4]]); R(5.75, 6.4, q3.B[0], 6.4);
+    T("R2", 6.25, 6.1, { alin: "center", base: "top", tam: F(9.5) });   // debajo (en el Python, encima; se pisaba con «Q3»)
+    R(8.0, 9.4, 8.0, 7.75, "Rc"); W([[8.0, 7.75], q3.C]); NODO(8.0, 7.5);
+    W([[8.0, 7.5], [8.9, 7.5]]); SALIDA(8.9, 7.5);
+    W([q3.E, [8.0, 2.9]]); GND(8.0, 2.6);
+    return (A, B) => {
+      const caminos = [];
+      if (A) caminos.push([pa, q1.B]);
+      if (B) caminos.push([pb, q2.B]);
+      if (A && B) caminos.push([[4.6, 9.4], [4.6, 2.9]]);
+      else {
+        caminos.push([[4.6, 9.4], [4.6, 7.6], [5.75, 7.6], [5.75, 6.4], q3.B]);
+        caminos.push([[8.0, 9.4], [8.0, 2.9]]);
+      }
+      return [(A && B ? 5.0 : 0.2), { Q1: !!A, Q2: !!B, Q3: !(A && B) }, caminos];
+    };
+  }
+  function c_or_rtl() {
+    VCC(4.0, 7.0, 9.2);
+    const q1 = NPN(4.15, 6.0, "Q1", false, "conduce"), q2 = NPN(6.85, 6.0, "Q2", true, "conduce");
+    W([q1.C, [4.6, 9.2]]); W([q2.C, [6.4, 9.2]]);
+    W([q1.E, [4.6, 4.2], [6.4, 4.2], q2.E]); NODO(5.5, 4.2);
+    W([[5.5, 4.2], [5.5, 3.6]]); NODO(5.5, 3.6); R(5.5, 3.6, 5.5, 2.2, "RE"); GND(5.5, 1.9);
+    W([[5.5, 3.6], [8.4, 3.6]]); SALIDA(8.4, 3.6);
+    const pa = ENTRADA("A", 0.6, 6.0); R(pa[0], 6.0, q1.B[0], 6.0, "RA");
+    const pb = ENTRADA("B", 8.65, 6.0, "R"); R(q2.B[0], 6.0, pb[0], 6.0, "RB", "b");   // rótulo debajo para no pisar «Q2»
+    return (A, B) => {
+      const caminos = [];
+      if (A) caminos.push([pa, q1.B], [[4.6, 9.2], [4.6, 4.2], [5.5, 4.2], [5.5, 2.2]]);
+      if (B) caminos.push([pb, q2.B], [[6.4, 9.2], [6.4, 4.2], [5.5, 4.2], [5.5, 2.2]]);
+      return [(A || B ? 4.3 : 0.0), { Q1: !!A, Q2: !!B }, caminos];
+    };
+  }
+  const CIRCUITOS = { [PUERTAS[0]]: c_and_diodos, [PUERTAS[1]]: c_and_rtl, [PUERTAS[2]]: c_or_diodos,
+    [PUERTAS[3]]: c_or_rtl, [PUERTAS[4]]: c_not };
+
+  // ── Estado y evaluación (sin dibujar)
+  const st = { puerta: PUERTAS[0], A: 0, B: 0 };
+  function evaluar() {
+    const una = st.puerta.startsWith("NOT");
+    const A = st.A, B = una ? 0 : st.B;
+    G = { ctx: null, est: {}, A, B, comp: [], boxes: {} };
+    const ev = CIRCUITOS[st.puerta]();
+    const [vx, est, caminos] = ev(A, B);
+    return { una, A, B, vx, est, caminos, xl: vx >= 2.0 ? 1 : 0, comp: G.comp, boxes: G.boxes };
+  }
+
+  const lienzo = new Sim.Lienzo("#esquema", {
+    ancho: ANCHO, proporcion: (YMAX - YMIN) / XMAX,
+    etiqueta: "Esquema de la compuerta elegida con el camino de la corriente",
+    dibujar(ctx) {
+      const e = evaluar();
+      // corriente por debajo de todo
+      for (const cam of e.caminos) {
+        Sim.polilinea(ctx, cam.map(([x, y]) => [X(x), Y(y)]), { color: CORR, ancho: 13, alfa: 0.45 });
+      }
+      G = { ctx, est: e.est, A: e.A, B: e.B, vx: e.vx, xl: e.xl, comp: [], boxes: {} };
+      CIRCUITOS[st.puerta]();
+      // leyenda
+      let x = 0.15;
+      const items = [["corriente", CORR, "none", 0.6], ["conduce / saturado", ON_F, ON_E, 1], ["cortado / en corte", OFF_F, OFF_E, 1]];
+      for (const [t, f, b, alfa] of items) {
+        ctx.save(); ctx.globalAlpha = alfa; ctx.fillStyle = f; ctx.fillRect(X(x), Y(1.03), 0.35 * U, 0.18 * U);
+        if (b !== "none") { ctx.globalAlpha = 1; ctx.strokeStyle = b; ctx.lineWidth = 1.5; ctx.strokeRect(X(x), Y(1.03), 0.35 * U, 0.18 * U); }
+        ctx.font = `${F(9)}px ${Sim.FUENTE}`; const tw = ctx.measureText(t).width / U; ctx.restore();
+        T(t, x + 0.45, 0.94, { base: "middle", tam: F(9), color: GRIS });
+        x += 0.45 + tw + 0.45;
+      }
+    },
+  });
+
+  const exp = document.getElementById("exp");
+  const salidaX = document.getElementById("salidaX");
+  const tabla = document.getElementById("tabla");
+  function actualizar() {
+    const e = evaluar();
+    const p = st.puerta;
+    const [expr, figRef, texto] = APUNTES[p];
+    const ahora = e.comp.map(({ nombre, tipo, onTxt }) => {
+      const on = !!e.est[nombre];
+      const estado = tipo === "diodo" ? (on ? "conduce" : "cortado")
+        : (on ? (onTxt === "saturado" ? "saturado (conduce)" : "conduce") : "en corte");
+      return `<li class="${on ? "on" : "off"}">${nombre}: ${estado}</li>`;
+    }).join("");
+    exp.innerHTML = `<h2>${p}</h2><p class="expr">${expr} · apuntes UD5, ${figRef}</p><p>${texto}</p>` +
+      `<p><b>Ahora mismo:</b></p><ul class="ahora">${ahora}</ul>`;
+    // salida grande
+    salidaX.className = "salida-x" + (e.xl ? " alto" : "");
+    salidaX.innerHTML = `<div class="ent">${e.una ? `A = ${e.A}` : `A = ${e.A}, B = ${e.B}`}</div>` +
+      `<div class="x">Salida X = ${e.xl}</div><div class="niv">(${num(e.vx, 1)} V: ${e.xl ? "nivel alto" : "nivel bajo"})</div>`;
+    // tabla de verdad
+    const cols = e.una ? ["A", "X"] : ["A", "B", "X"];
+    const filas = e.una ? [[0], [1]] : [[0, 0], [0, 1], [1, 0], [1, 1]];
+    tabla.innerHTML = `<thead><tr>${cols.map((c) => `<th>${c}</th>`).join("")}</tr></thead><tbody>` +
+      filas.map((f) => {
+        const actual = e.una ? f[0] === e.A : (f[0] === e.A && f[1] === e.B);
+        const xv = e.una ? 1 - f[0] : (p.startsWith("AND") ? (f[0] & f[1]) : (f[0] | f[1]));
+        return `<tr${actual ? ' class="actual"' : ""}>${[...f, xv].map((v) => `<td>${v}</td>`).join("")}</tr>`;
+      }).join("") + "</tbody>";
+    bA.textContent = `A = ${st.A}  (cambiar)`;
+    bB.textContent = `B = ${st.B}  (cambiar)`;
+    bB.hidden = e.una;
+    lienzo.pedir();
+  }
+  function poner(o) { Object.assign(st, o); actualizar(); }
+
+  Sim.opciones("#mandos", { titulo: "Compuerta", etiquetas: PUERTAS, activa: 0, alCambiar: (i, t) => poner({ puerta: t }) });
+  const bA = Sim.boton("#mandos", "", () => poner({ A: 1 - st.A }));
+  const bB = Sim.boton("#mandos", "", () => poner({ B: 1 - st.B }));
+  let reloj = null, iAnim = 0;
+  function paso() {
+    const combos = st.puerta.startsWith("NOT") ? [[0, 0], [1, 0]] : [[0, 0], [0, 1], [1, 0], [1, 1]];
+    iAnim = (iAnim + 1) % combos.length;
+    poner({ A: combos[iAnim][0], B: combos[iAnim][1] });
+  }
+  const bT = Sim.boton("#mandos", "Recorrer la tabla", () => {
+    if (reloj === null) { reloj = setInterval(paso, 1500); bT.textContent = "Parar"; }
+    else { clearInterval(reloj); reloj = null; bT.textContent = "Recorrer la tabla"; }
+  });
+
+  // Tocar las cajas A y B del circuito
+  const dentroCaja = (px, py) => {
+    const x = px / U, y = YMAX - py / U;
+    const { boxes } = evaluar();
+    return Object.keys(boxes).find((n) => { const [x0, y0, w, h] = boxes[n]; return x >= x0 && x <= x0 + w && y >= y0 && y <= y0 + h; });
+  };
+  lienzo.puntero({
+    abajo(px, py) { const n = dentroCaja(px, py); if (n) poner({ [n]: 1 - st[n] }); },
+    mover(px, py) { lienzo.canvas.style.cursor = dentroCaja(px, py) ? "pointer" : "default"; },
+  });
+
+  actualizar();
+})();
+</script>
+</body>
+</html>

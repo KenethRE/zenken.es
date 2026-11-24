@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Elige la prueba, la avería y el cable, mira qué marca el óhmetro y deduce qué le pasa al cable.">
+<title>Continuidad de un cable: óhmetro y caja de corte · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .banda-averia { font-weight: 700; white-space: pre-line; margin: 0; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Continuidad de un cable: óhmetro y caja de corte</h1>
+    <p class="sub">UD4 · CE g · métodos de los apuntes</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div id="esquema"></div>
+      <div class="tarjeta"><h2>Mandos</h2><div class="fila"><div class="controles" id="mandos"></div><div class="controles" id="mandos2"></div></div></div>
+    </div>
+    <aside class="lateral">
+      <div class="panel"><h2>Medida</h2><div class="salida" id="salida"></div></div>
+      <div class="tarjeta"><div class="controles" id="mostrar"></div><p class="banda-averia" id="averia"></p></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Un cable del avión va de la caja de corte (punto A) al conector P2 (punto B). Elige la prueba (método 1 a masa, método 2 con prolongación o prueba de cortocircuito), la avería del cable, su longitud y su calibre, y mira qué marca el óhmetro. La lectura se compara con la resistencia esperada (longitud × resistencia por metro del Manual Standard).</p>
+      <p>Desmarca «Mostrar la avería real» para que el alumnado la deduzca solo con las lecturas.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Preguntas para el alumnado</h2>
+      <ul>
+        <li>¿Qué marca el óhmetro si el cable está cortado?</li>
+        <li>¿Por qué después del método 1 se hace una prueba de cortocircuito? (prueba «Cortado + corto a masa» con el método 1).</li>
+        <li>¿Qué avería no ve el método 2?</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Datos de referencia</h2>
+      <p class="nota-ref">Resistencias por metro: valores de ejemplo para cobre a 20 °C (no están en los apuntes): AWG 22 0,053 Ω/m, AWG 20 0,033 Ω/m, AWG 18 0,021 Ω/m y AWG 16 0,013 Ω/m. Criterio de este ejercicio: la lectura es correcta si no se aparta de la esperada más de 0,1 Ω + 10 %.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  /* calc:inicio */
+  const AWG = { "AWG 22": 0.053, "AWG 20": 0.033, "AWG 18": 0.021, "AWG 16": 0.013 }; // Ω/m (ejemplo de Manual Standard)
+  const AVERIAS = ["Cable correcto", "Cable cortado", "Corto a masa", "Cortado + corto a masa previo", "Terminal oxidado (+1,5 Ω)"];
+  const PRUEBAS = ["Método 1: a masa", "Método 2: con prolongación", "Prueba de corto a masa (B libre)"];
+  const R_MASA = 0.01, R_CORTO = 0.05, R_PROL = 0.20, R_OXIDO = 1.5;
+  const INF = Infinity;
+  const par = (a, b) => a * b / (a + b);
+
+  // Resistencia que marca el óhmetro (Ω; INF = OL). pos: posición del defecto (0–1) desde A.
+  function lectura(prueba, averia, largo, rm, pos) {
+    const rCable = largo * rm;
+    const rx = pos * largo * rm;                       // de A al defecto
+    const rs = Math.max(pos - 0.05, 0.02) * largo * rm; // caso 3: el corto a masa está justo antes del corte
+    const extra = averia === 4 ? R_OXIDO : 0.0;
+    if (prueba === 0) {                                // A al óhmetro, B unido a masa, otra punta a masa
+      if (averia === 1) return INF;
+      if (averia === 2) return par(rx + R_CORTO, rCable) + R_MASA;
+      if (averia === 3) return rs + R_CORTO + R_MASA;  // el corto está antes del corte: la corriente vuelve por la estructura
+      return rCable + extra + R_MASA;
+    }
+    if (prueba === 1) {                                // prolongación de B al óhmetro; el cable no toca masa en sus extremos
+      if (averia === 1 || averia === 3) return INF;
+      return rCable + extra + R_PROL;
+    }
+    // prueba de cortocircuito: A al óhmetro, otra punta a masa, B libre
+    if (averia === 2) return rx + R_CORTO + R_MASA;
+    if (averia === 3) return rs + R_CORTO + R_MASA;
+    return INF;
+  }
+  function esperada(prueba, largo, rm) {
+    if (prueba === 0) return largo * rm + R_MASA;
+    if (prueba === 1) return largo * rm + R_PROL;
+    return INF;
+  }
+  // Lo que concluye el técnico con la lectura: [texto, "ok" | "mal"]
+  function interpretar(prueba, r, rEsp) {
+    if (prueba === 2) return r === INF ? ["OL: no hay corto a masa", "ok"] : ["Marca resistencia: ¡HAY CORTO A MASA!", "mal"];
+    if (r === INF) return ["La indicación no cambia (OL):\nNO hay continuidad, cable cortado", "mal"];
+    if (Math.abs(r - rEsp) <= 0.1 + 0.1 * rEsp) return ["La indicación cambia y coincide con la esperada: continuidad correcta", "ok"];
+    if (r > rEsp) return ["Resistencia MAYOR que la esperada:\nrevisa contactos y terminales", "mal"];
+    return ["Resistencia MENOR que la esperada:\n¿corto a masa? Haz la prueba de corto", "mal"];
+  }
+  // Compara la conclusión con la avería real: [texto, "ok" | "aviso" | "mal"]
+  function verdad(prueba, averia, concl) {
+    if (averia === 0) return concl === "ok" ? ["Cable bueno: la prueba lo confirma.", "ok"] : ["La prueba indica un fallo inexistente.", "mal"];
+    const detecta = concl === "mal";
+    // Corregido respecto al Python: la «lectura baja» solo sale con el método 1; con el método 2 un cable cortado da OL
+    if (detecta && (averia === 2 || averia === 3) && prueba === 0) return ["Lectura baja: solo es una sospecha.\nConfírmalo con la prueba de corto a masa.", "aviso"];
+    if (detecta && averia === 3 && prueba === 1) return ["Bien: esta prueba descubre el corte.\nEl corto a masa se ve con la prueba de corto a masa.", "aviso"];
+    if (detecta) return ["Bien: esta prueba descubre la avería.", "ok"];
+    const consejo = {
+      2: "un corto a masa no cambia la continuidad:\nhaz la prueba de cortocircuito.",
+      1: "un cable cortado no se ve con esta prueba:\nhaz el método 1 o el 2.",
+      3: "el corto a masa ENMASCARA el corte:\nhaz después la prueba de corto a masa.",
+      4: "el óxido solo se ve midiendo continuidad:\nhaz el método 1 o el 2.",
+    }[averia];
+    return ["¡Cuidado! Esta prueba NO detecta la avería:\n" + consejo, "mal"];
+  }
+  function informe(pr, av, largo, awg, pos, mostrar) {
+    const rm = AWG[awg];
+    const r = lectura(pr, av, largo, rm, pos), rEsp = esperada(pr, largo, rm);
+    const pantalla = r === INF ? "OL" : (r < 100 ? num(r, 2, "Ω") : "OL");
+    const [concl, estado] = interpretar(pr, r, rEsp);
+    const l = [PRUEBAS[pr], `Cable: ${num(largo, 1, "m")} × ${num(rm, 3, "Ω/m")} = ${num(largo * rm, 2, "Ω")}`];
+    if (pr === 0) l.push(`Esperada (+ masa ${num(R_MASA, 2, "Ω")}): ${num(rEsp, 2, "Ω")}`);
+    else if (pr === 1) l.push(`Esperada (+ prolong. ${num(R_PROL, 2, "Ω")}): ${num(rEsp, 2, "Ω")}`);
+    else l.push("Esperada: OL (sin camino a masa)");
+    l.push(`Lectura: ${r === INF ? "OL" : num(r, 2, "Ω")}`, "", concl);
+    let banda, tipo;
+    if (mostrar) { const [t, c] = verdad(pr, av, estado); banda = `Avería real: ${AVERIAS[av].toLowerCase()}\n${t}`; tipo = c; }
+    else { banda = "Avería oculta: dedúcela con las lecturas (haz varias pruebas)"; tipo = "oculta"; }
+    return { r, pantalla, salida: l.join("\n"), estado, banda, tipo };
+  }
+  /* calc:fin */
+
+  const AMBAR = "#C77C00";
+  const st = { averia: 0, prueba: 0, awg: "AWG 20", largo: 15, pos: 0.60, mostrar: true };
+
+  // Esquema: x de 0 a 10 e y de 0 a 6,2 (unidades del Python), en un lienzo lógico de 720 × 360
+  const KX = 72, KY = 360 / 6.2;
+  const X = (x) => x * KX, Y = (y) => (6.2 - y) * KY;
+  const T = (ctx, s, x, y, e = {}) => Sim.texto(ctx, s, X(x), Y(y), Object.assign({ tam: 19 }, e));
+  const L = (ctx, xs, ys, e) => Sim.polilinea(ctx, xs.map((x, i) => [X(x), Y(ys[i])]), e);
+  const R = (ctx, x, y, w, h, e) => Sim.caja(ctx, X(x), Y(y + h), w * KX, h * KY, Object.assign({ radio: 0 }, e));
+
+  const esquema = new Sim.Lienzo("#esquema", {
+    ancho: 720, proporcion: 0.5, etiqueta: "Esquema del cable, la caja de corte y el óhmetro",
+    dibujar(ctx) {
+      const { averia: av, prueba: pr, largo, pos, mostrar } = st;
+      const inf = informe(pr, av, largo, st.awg, pos, mostrar);
+      // estructura del avión (masa), con rayado
+      R(ctx, 0.2, 0.35, 9.6, 0.4, { relleno: "#D9DEE7", color: C.MUTED, ancho: 1 });
+      ctx.save(); ctx.beginPath(); ctx.rect(X(0.2), Y(0.75), 9.6 * KX, 0.4 * KY); ctx.clip();
+      ctx.strokeStyle = C.MUTED; ctx.lineWidth = 1; ctx.beginPath();
+      for (let x = X(0.2) - 30; x < X(9.8); x += 10) { ctx.moveTo(x, Y(0.35)); ctx.lineTo(x + 24, Y(0.75)); }
+      ctx.stroke(); ctx.restore();
+      T(ctx, "Estructura del avión (masa)", 5.0, 0.0, { alin: "center", base: "bottom", color: C.MUTED, tam: 18 });
+      // caja de corte y punto A
+      R(ctx, 0.2, 2.7, 1.8, 2.2, { relleno: C.CARD, color: C.NAVY, ancho: 2 });
+      T(ctx, "Caja de\ncorte", 1.1, 4.55, { alin: "center", base: "top", negrita: true, color: C.NAVY, tam: 20 });
+      for (let k = 0; k < 3; k++) R(ctx, 0.45 + k * 0.5, 3.0, 0.3, 0.3, { relleno: C.WHITE, color: C.MUTED, ancho: 1 });
+      // conector P2 y punto B
+      R(ctx, 8.6, 3.1, 0.9, 1.0, { relleno: C.CARD, color: C.NAVY, ancho: 2 });
+      T(ctx, "P2\n(desconectado)", 9.05, 2.95, { alin: "center", base: "top", color: C.NAVY, tam: 17 });
+      // óhmetro
+      R(ctx, 3.7, 4.85, 2.6, 1.25, { relleno: C.NAVY, color: C.NAVY, ancho: 2 });
+      T(ctx, "ÓHMETRO", 5.0, 5.9, { alin: "center", base: "middle", negrita: true, color: C.GOLD, tam: 16 });
+      ctx.save(); ctx.font = "bold 34px ui-monospace, Menlo, Consolas, monospace"; ctx.fillStyle = C.WHITE;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(inf.pantalla, X(5.0), Y(5.3)); ctx.restore();
+      // cable (con hueco si está cortado y se muestra la avería)
+      const x0 = 2.0, x1 = 8.6, xd = x0 + pos * (x1 - x0);
+      const negro = { color: C.INK, ancho: 3 };
+      if (mostrar && (av === 1 || av === 3)) {
+        L(ctx, [x0, xd - 0.12], [3.6, 3.6], negro); L(ctx, [xd + 0.12, x1], [3.6, 3.6], negro);
+        L(ctx, [xd - 0.18, xd + 0.18], [3.3, 3.9], { color: C.RED, ancho: 3 });
+        L(ctx, [xd - 0.18, xd + 0.18], [3.9, 3.3], { color: C.RED, ancho: 3 });
+      } else L(ctx, [x0, x1], [3.6, 3.6], negro);
+      if (mostrar && (av === 2 || av === 3)) {
+        const xs = x0 + (av === 3 ? Math.max(pos - 0.05, 0.02) : pos) * (x1 - x0);
+        L(ctx, [xs, xs + 0.15, xs - 0.15, xs + 0.15, xs - 0.15, xs], [3.6, 3.1, 2.4, 1.7, 1.1, 0.75], { color: C.RED, ancho: 2.5 });
+        T(ctx, "corto a\nmasa", xs - 0.25, 2.2, { color: C.RED, negrita: true, alin: "right" });
+      }
+      if (mostrar && av === 4) {
+        R(ctx, 8.35, 3.35, 0.5, 0.5, { relleno: "#B5651D", alfa: 0.8, color: C.RED, ancho: 2 });
+        T(ctx, "óxido", 8.6, 4.35, { color: C.RED, negrita: true, alin: "center" });
+      }
+      Sim.circulo(ctx, X(2.0), Y(3.6), 6, { relleno: C.NAVY, color: null });
+      Sim.circulo(ctx, X(8.6), Y(3.6), 6, { relleno: C.NAVY, color: null });
+      T(ctx, "A", 2.15, 3.75, { negrita: true, tam: 22 });
+      T(ctx, "B", 8.45, 3.75, { negrita: true, tam: 22, alin: "right" });
+      T(ctx, `Cable del avión · ${num(largo, 1, "m")} · ${st.awg}`, 5.3, 4.2, { alin: "center", base: "bottom", color: C.INK, tam: 18 });
+      // puntas del óhmetro: siempre una a A
+      L(ctx, [3.7, 2.0, 2.0], [5.1, 5.1, 3.6], { color: C.RED, ancho: 2 });
+      T(ctx, "punta roja", 2.1, 5.15, { color: C.RED, tam: 18 });
+      if (pr === 0 || pr === 2) { // la otra punta a masa (rodeando la caja de corte)
+        L(ctx, [3.7, 0.08, 0.08], [5.75, 5.75, 0.75], { color: "#000000", ancho: 2 });
+        T(ctx, "punta negra a masa", 0.15, 5.82, { color: C.INK, tam: 18 });
+      }
+      if (pr === 0) { // B unido a masa
+        L(ctx, [8.6, 8.6], [3.1, 0.75], { color: C.GREEN, ancho: 2.5 });
+        T(ctx, "B unido\na masa", 8.7, 1.3, { color: C.GREEN, tam: 18 });
+      }
+      if (pr === 1) { // prolongación de B al óhmetro
+        L(ctx, [6.3, 9.8, 9.8, 9.5], [5.4, 5.4, 3.6, 3.6], { color: C.GREEN, ancho: 2.5, guion: true });
+        T(ctx, "punta negra + prolongación", 8.05, 5.5, { color: C.GREEN, alin: "center", tam: 18 });
+      }
+    },
+  });
+
+  const salida = document.getElementById("salida"), averia = document.getElementById("averia");
+  const COLOR = { ok: C.GREEN, aviso: AMBAR, mal: C.RED, oculta: C.MUTED };
+  function actualizar() {
+    const inf = informe(st.prueba, st.averia, st.largo, st.awg, st.pos, st.mostrar);
+    salida.textContent = inf.salida;
+    salida.style.color = inf.estado === "ok" ? C.NAVY : AMBAR;
+    averia.textContent = inf.banda;
+    averia.style.color = COLOR[inf.tipo];
+    esquema.pedir();
+  }
+
+  Sim.deslizador("#mandos", { etiqueta: "Longitud", min: 1, max: 40, valor: 15, paso: 0.5, unidad: "m", dec: 1, alCambiar: (v) => { st.largo = v; actualizar(); } });
+  Sim.deslizador("#mandos", { etiqueta: "Defecto a", min: 5, max: 90, valor: 60, paso: 5, unidad: "%", dec: 0, alCambiar: (v) => { st.pos = v / 100; actualizar(); } });
+  Sim.opciones("#mandos", { titulo: "Calibre", etiquetas: Object.keys(AWG), activa: 1, alCambiar: (i, t) => { st.awg = t; actualizar(); } });
+  Sim.opciones("#mandos2", { titulo: "Avería del cable", etiquetas: AVERIAS, activa: 0, alCambiar: (i) => { st.averia = i; actualizar(); } });
+  Sim.opciones("#mandos2", { titulo: "Prueba", etiquetas: PRUEBAS, activa: 0, alCambiar: (i) => { st.prueba = i; actualizar(); } });
+  Sim.casillas("#mostrar", { etiquetas: ["Mostrar la avería real"], marcadas: [true], alCambiar: (i, v) => { st.mostrar = v; actualizar(); } });
+  actualizar();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Cambia el mazo, la separación entre abrazaderas, la catenaria y el radio de curva, y comprueba las reglas.">
+<title>Instalación de un mazo: abrazaderas y curvas · 1444</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="../comun/sim.css">
+<style>
+  .reglas { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .reglas li { display: grid; grid-template-columns: 1.4em 1fr; }
+  .reglas .m { font-weight: 700; }
+  .reglas .t { font-weight: 700; }
+  .reglas .d { grid-column: 2; color: var(--muted); font-size: .92rem; }
+  .veredicto { margin: 12px 0 0; font-weight: 700; font-size: 1.15rem; }
+</style>
+</head>
+<body>
+<header class="banda">
+  <div class="dentro">
+    <p class="migas"><a href="../">Simuladores</a> › <a href="./">1444 Instalaciones eléctricas y electrónicas</a></p>
+    <h1>Instalación de un mazo: abrazaderas y curvas</h1>
+    <p class="sub">UD3 · CE g · CE h · CE i · inspección del mazo</p>
+  </div>
+</header>
+
+<main class="contenido">
+  <section class="sim">
+    <div class="escena">
+      <div class="fila">
+        <div id="tramo"></div>
+        <div id="curva"></div>
+      </div>
+      <div class="tarjeta"><h2>Mandos</h2><div class="fila"><div class="controles" id="mandos"></div><div class="controles" id="mandos2"></div></div></div>
+      <p class="nota-ref">Reglas de los apuntes: 75 cables, 50 mm, ½" y 30 cm. Datos de referencia (FAA AC 43.13-1B): 60 cm entre abrazaderas y radio ≥ 10 × Ø del cable más grueso.</p>
+    </div>
+    <aside class="lateral">
+      <div class="panel"><h2>Inspección</h2><ul class="reglas" id="reglas"></ul><p class="veredicto" id="veredicto"></p></div>
+    </aside>
+  </section>
+
+  <section class="guia">
+    <div class="tarjeta">
+      <h2>Qué muestra</h2>
+      <p>Mueve los deslizadores como si estuvieras inspeccionando un mazo instalado en el avión: número de cables, diámetro en la brida de fijación, separación entre abrazaderas, catenaria al presionar con la mano, diámetro del cable más grueso y radio de la curva. Cada regla se pone en rojo cuando se incumple. Las marcas doradas del tramo son los lazos puntuales.</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Preguntas para el alumnado</h2>
+      <ul>
+        <li>¿Qué pasa con la catenaria si separas más las abrazaderas?</li>
+        <li>¿Cuándo hacen falta lazos puntuales?</li>
+        <li>¿Por qué no se puede doblar un mazo en ángulo vivo junto al conector?</li>
+      </ul>
+    </div>
+    <div class="tarjeta">
+      <h2>Reglas y datos de referencia</h2>
+      <p>Reglas de los apuntes de la UD3 (apdos. 8.1, 8.2 y 11.1): menos de 75 cables; no más de 50 mm de diámetro en las bridas de fijación; catenaria máxima de media pulgada (12,7 mm) entre dos abrazaderas al presionar con la mano; lazos puntuales cuando la separación entre abrazaderas supera los 30 cm.</p>
+      <p class="nota-ref">Datos de referencia (no están en los apuntes; FAA AC 43.13-1B, cap. 11): abrazaderas separadas normalmente 60 cm (24 pulgadas) como máximo; radio de curvatura del mazo de al menos 10 veces el diámetro exterior del cable más grueso.</p>
+    </div>
+  </section>
+</main>
+<footer class="pie">Módulo 1444 · Instalaciones eléctricas y electrónicas · Simulación didáctica</footer>
+
+<script src="../comun/sim.js"></script>
+<script>
+(() => {
+  const { C, num } = Sim;
+
+  /* calc:inicio */
+  const CATENARIA_MAX = 12.7; // mm (½ pulgada, apuntes)
+  const SEP_LAZOS = 30;       // cm (apuntes)
+  const SEP_MAX = 60;         // cm (dato de referencia)
+  const K_RADIO = 10;         // radio mínimo = 10 × Ø del cable más grueso (dato de referencia)
+
+  // Lista de [texto, condición, estado] con estado "ok", "mal" o "aviso"
+  function reglas(n, dMazo, sep, cat, dCable, radio) {
+    const rmin = K_RADIO * dCable;
+    return [
+      [`Cables: ${n}`, "menos de 75", n < 75 ? "ok" : "mal"],
+      [`Ø en la brida: ${num(dMazo, 0, "mm")}`, "máximo 50 mm", dMazo <= 50 ? "ok" : "mal"],
+      [`Catenaria: ${num(cat, 1, "mm")}`, "máximo ½\" = 12,7 mm", cat <= CATENARIA_MAX ? "ok" : "mal"],
+      [`Separación: ${num(sep, 0, "cm")}`, "máximo 60 cm (dato de referencia)", sep <= SEP_MAX ? "ok" : "mal"],
+      ["Lazos puntuales: " + (sep > SEP_LAZOS ? "SÍ" : "no hacen falta"), "si la separación supera 30 cm", sep > SEP_LAZOS ? "aviso" : "ok"],
+      [`Radio de la curva: ${num(radio, 0, "mm")}`, `mínimo 10 × ${num(dCable, 1, "mm")} = ${num(rmin, 0, "mm")} (ref.)`, radio >= rmin ? "ok" : "mal"],
+    ];
+  }
+  function veredicto(estados) {
+    const fallos = estados.filter((e) => e[2] === "mal").length;
+    return { fallos, texto: fallos === 0 ? "Mazo ACEPTABLE" : `NO aceptable:\n${fallos} regla${fallos > 1 ? "s" : ""} incumplida${fallos > 1 ? "s" : ""}` };
+  }
+  // posiciones de los lazos puntuales entre las dos abrazaderas
+  function lazos(sep) {
+    if (sep <= SEP_LAZOS) return [];
+    const k = Math.ceil(sep / SEP_LAZOS);
+    return Sim.linspace(0, sep, k + 1).slice(1, -1);
+  }
+  const flecha = (x, sep, cat) => -4 * cat * (x / sep) * (1 - x / sep);
+  /* calc:fin */
+
+  const GRAY = "#9AA7BD", AMBAR = "#B7791F";
+  const v = { n: 48, dm: 30, sep: 45, cat: 8, dc: 4, r: 60 };
+  const fmt0 = (x) => num(x, 0);
+
+  // Tramo entre dos abrazaderas (vista lateral)
+  const tramo = new Sim.Lienzo("#tramo", {
+    proporcion: 0.8, altoMin: 300, etiqueta: "Tramo del mazo entre dos abrazaderas",
+    dibujar(ctx, w, h, L) {
+      const { sep, cat, dm } = v;
+      const ej = new Sim.Ejes(L, ctx, { xlim: [-5, Math.max(sep, 30) + 5], ylim: [-32, 12], titulo: "Tramo entre dos abrazaderas",
+        xlabel: "Posición (cm)", ylabel: "Flecha al presionar (mm)", fmtx: fmt0, fmty: fmt0 });
+      ej.marco();
+      ej.hline(-CATENARIA_MAX, { color: C.RED, guion: true, ancho: 1.8 });
+      Sim.texto(ctx, "límite ½\" (12,7 mm)", ej.x0 + ej.ancho - 4, ej.py(-CATENARIA_MAX) - 5, { tam: 13, alin: "right", color: C.RED });
+      const xs = Sim.linspace(0, sep, 120);
+      const mal = cat > CATENARIA_MAX;
+      ej.linea(xs, xs.map((x) => flecha(x, sep, cat)), { color: mal ? C.RED : C.NAVY, ancho: (3 + dm / 5) * 1.3 });
+      ej.recortar();
+      for (const xa of [-1.5, sep - 0.5]) {
+        const a = ej.px(xa), b = ej.px(xa + 2);
+        ctx.fillStyle = GRAY; ctx.fillRect(a, ej.py(6), b - a, ej.py(-6) - ej.py(6));
+      }
+      for (const xl of lazos(sep)) {
+        const X = ej.px(xl), Y = ej.py(flecha(xl, sep, cat));
+        Sim.polilinea(ctx, [[X, Y - 17], [X, Y + 17]], { color: C.GOLD, ancho: 5 });
+      }
+      ej.soltar();
+    },
+  });
+
+  // Curva del mazo junto al conector (a escala, ejes iguales)
+  const curva = new Sim.Lienzo("#curva", {
+    proporcion: 0.8, altoMin: 300, etiqueta: "Curva del mazo junto al conector",
+    dibujar(ctx, w, h, L) {
+      const { dc, dm, r } = v;
+      const rmin = K_RADIO * dc;
+      const Lm = Math.max(r + dm / 2, rmin) * 1.3 + 20;
+      const cola = -0.35 * Lm;
+      const ej = new Sim.Ejes(L, ctx, { xlim: [cola - 5, Lm], ylim: [cola - 5, Lm], titulo: "Curva junto al conector", xlabel: "mm", fmtx: fmt0, fmty: fmt0 });
+      // misma escala en x y en y: se amplía el eje que sobra
+      const span = Lm - (cola - 5);
+      if (ej.ancho > ej.alto) { const extra = span * (ej.ancho / ej.alto - 1); ej.xlim = [cola - 5 - extra / 2, Lm + extra / 2]; }
+      else { const extra = span * (ej.alto / ej.ancho - 1); ej.ylim = [cola - 5 - extra / 2, Lm + extra / 2]; }
+      ej.marco();
+      const ang = Sim.linspace(Math.PI / 2, 0, 60);
+      const ext = r + dm / 2, inte = Math.max(r - dm / 2, 0);
+      const pts = [[cola, ext], ...ang.map((a) => [ext * Math.cos(a), ext * Math.sin(a)]), [ext, cola],
+        [inte, cola], ...ang.slice().reverse().map((a) => [inte * Math.cos(a), inte * Math.sin(a)]), [cola, inte]];
+      ej.recortar();
+      Sim.polilinea(ctx, pts.map(([x, y]) => [ej.px(x), ej.py(y)]), { cerrar: true, relleno: r < rmin ? C.RED : C.NAVY, color: r < rmin ? C.RED : C.NAVY, ancho: 1, alfa: 0.85 });
+      ej.soltar();
+      ej.linea(ang.map((a) => rmin * Math.cos(a)), ang.map((a) => rmin * Math.sin(a)), { color: C.RED, guion: true, ancho: 1.8 });
+      ej.leyenda([{ texto: "radio mínimo", color: C.RED, guion: true, ancho: 1.8 }]);
+    },
+  });
+
+  const ul = document.getElementById("reglas"), ver = document.getElementById("veredicto");
+  const COL = { ok: C.GREEN, mal: C.RED, aviso: AMBAR }, MARCA = { ok: "✓", mal: "✗", aviso: "!" };
+  function actualizar() {
+    const est = reglas(Math.round(v.n), v.dm, v.sep, v.cat, v.dc, v.r);
+    ul.replaceChildren(...est.map(([t, c, e]) => Sim.el("li", { style: `color:${COL[e]}` },
+      Sim.el("span", { class: "m", text: MARCA[e] }), Sim.el("span", { class: "t", text: t }), Sim.el("span", { class: "d", text: c }))));
+    const vd = veredicto(est);
+    ver.textContent = vd.texto.replace("\n", " ");
+    ver.style.color = vd.fallos === 0 ? C.GREEN : C.RED;
+    tramo.pedir(); curva.pedir();
+  }
+
+  const D = (cont, etiqueta, min, max, clave, paso, unidad, dec) =>
+    Sim.deslizador(cont, { etiqueta, min, max, valor: v[clave], paso, unidad, dec, alCambiar: (x) => { v[clave] = x; actualizar(); } });
+  D("#mandos", "N.º de cables", 5, 120, "n", 1, "", 0);
+  D("#mandos", "Ø del mazo", 5, 70, "dm", 1, "mm", 0);
+  D("#mandos", "Separación", 10, 90, "sep", 1, "cm", 0);
+  D("#mandos2", "Catenaria", 0, 30, "cat", 0.5, "mm", 1);
+  D("#mandos2", "Ø cable grueso", 1, 12, "dc", 0.5, "mm", 1);
+  D("#mandos2", "Radio curva", 10, 300, "r", 5, "mm", 0);
+  actualizar();
+})();
+</script>
+</body>
+</html>
